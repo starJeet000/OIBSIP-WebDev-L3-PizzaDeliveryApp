@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased] - 2026/10/16
+
+### Added
+
+- **Feature 3.6: Real-Time Order Tracking (Partial)**
+  - **Tracking Dashboard:** Created `OrderTracking.jsx` to visualize the exact progress timeline (`Order Received` -> `Delivered`)[cite: 1].
+  - **Live Polling:** Implemented Option A (10-second `setInterval` polling) to fetch live status updates from the backend without page refreshes[cite: 1].
+  - **Delivery Integration:** Added dynamic UI rendering for estimated delivery times and assigned delivery person details[cite: 1].
+
+- **Feature 3.5: Payment Integration (Partial)**
+  - **Razorpay Setup:** Configured Razorpay SDK on the Node.js backend with secure cryptographic signature verification (`crypto.createHmac`)[cite: 1].
+  - **Checkout Flow:** Built the frontend Razorpay modal initialization in `OrderSummary.jsx`, pre-filling user profiles and handling both success (DB creation, cart clearing) and failure (UI error toasts) states[cite: 1].
+  - **Order Persistence:** Developed the robust MongoDB `Order` schema to immutably store cart customizations, transaction IDs, and pricing breakdowns post-verification[cite: 1].
+
 ## [Unreleased] - 2026/10/03
 
 ### Added
