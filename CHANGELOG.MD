@@ -2,6 +2,9 @@
 
 ## [Unreleased] - 2026/10/16
 
+- **Fix: React Router Import Resolution**
+  - Corrected component paths in `App.jsx` to correctly map `LoginForm.jsx`, `RegisterForm.jsx`, and `UserDashboard.jsx` from the `components/` directory instead of `pages/`.
+
 ### Added
 
 - **Feature 3.6: Real-Time Order Tracking**
