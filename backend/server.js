@@ -7,6 +7,7 @@ import userRoutes from "./routes/userRoutes.js";
 import pizzaRoutes from "./routes/pizzaRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
+import adminRoutes from "./routes/adminRoutes.js";
 
 // Load environment variables
 dotenv.config();
@@ -31,8 +32,8 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/pizzas", pizzaRoutes);
-app.use('/api/orders', orderRoutes);
-// app.use('/api/admin', adminRoutes);
+app.use("/api/orders", orderRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api/payments", paymentRoutes);
 
 const PORT = process.env.PORT || 5000;

@@ -24,6 +24,10 @@ import PizzaBuilder from "./components/PizzaBuilder";
 import OrderSummary from "./components/OrderSummary";
 import OrderTracking from "./pages/OrderTracking";
 
+// Feature 4.1 & 4.2: Admin Login & Dashboard
+import AdminLogin from "./pages/admin/AdminLogin";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+
 function App() {
   return (
     <Router>
@@ -54,6 +58,10 @@ function App() {
           <Route path="/builder" element={<PizzaBuilder />} />
           <Route path="/checkout" element={<OrderSummary />} />
           <Route path="/orders/:id/success" element={<OrderTracking />} />
+
+          {/* Admin Login & Dashboard Routes */}
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
         </Routes>
       </main>
     </Router>

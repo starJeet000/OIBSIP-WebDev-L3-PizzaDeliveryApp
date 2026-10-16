@@ -7,6 +7,16 @@
 
 ### Added
 
+- **Feature 4.2: Admin Dashboard Complete**
+  - **Analytics UI:** Built `AdminDashboard.jsx` featuring dynamic metric cards (Revenue, Active Orders, New Users).
+  - **Data Visualization:** Integrated `recharts` to render a 7-day revenue trend line chart and a top-selling pizzas bar chart.
+  - **Admin Navigation:** Created a dedicated secure sidebar for routing between Inventory, Orders, and System metrics.
+  - **Backend Aggregation:** Developed the `getDashboardMetrics` controller to dynamically calculate real-time platform statistics from MongoDB collections.
+
+- **Feature 4.1: Admin Authentication Complete**
+  - **Role-Based Access Control:** Implemented backend `admin` middleware to strictly protect administrative routes.
+  - **Dedicated Login Flow:** Created `/admin/login` page isolated from user registration, enforcing a 1-hour auto-logout JWT session limit.
+
 - **Feature 3.6: Real-Time Order Tracking**
   - **Tracking Dashboard:** Created `OrderTracking.jsx` to visualize the exact progress timeline (`Order Received` -> `Delivered`).
   - **Live Polling:** Implemented 10-second `setInterval` polling to fetch live status updates from the backend without page refreshes.

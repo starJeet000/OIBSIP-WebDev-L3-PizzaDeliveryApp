@@ -107,19 +107,24 @@ export const loginUser = async (req, res) => {
 export const forgotPassword = async (req, res) => {
   try {
     const user = await User.findOne({ email: req.body.email });
-    
+
     if (!user) {
-      return res.status(404).json({ success: false, message: 'There is no user with that email' });
+      return res
+        .status(404)
+        .json({ success: false, message: "There is no user with that email" });
     }
 
     // Generate reset token
-    const resetToken = crypto.randomBytes(20).toString('hex');
+    const resetToken = crypto.randomBytes(20).toString("hex");
 
     // Hash token and set to resetPasswordToken field
-    user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-    
+    user.resetPasswordToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
     // Set expire time to 1 hour
-    user.resetPasswordExpire = Date.now() + 60 * 60 * 1000; 
+    user.resetPasswordExpire = Date.now() + 60 * 60 * 1000;
 
     await user.save({ validateBeforeSave: false });
 
@@ -134,17 +139,22 @@ export const forgotPassword = async (req, res) => {
     try {
       await sendEmail({
         email: user.email,
-        subject: 'Password Reset Token',
-        message
+        subject: "Password Reset Token",
+        message,
       });
 
-      res.status(200).json({ success: true, message: 'Reset link sent to email' });[cite: 1]
+      res
+        .status(200)
+        .json({ success: true, message: "Reset link sent to email" });
+      [cite, 1];
     } catch (error) {
       user.resetPasswordToken = undefined;
       user.resetPasswordExpire = undefined;
       await user.save({ validateBeforeSave: false });
 
-      return res.status(500).json({ success: false, message: 'Email could not be sent' });
+      return res
+        .status(500)
+        .json({ success: false, message: "Email could not be sent" });
     }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -156,25 +166,33 @@ export const forgotPassword = async (req, res) => {
 export const resetPassword = async (req, res) => {
   try {
     // Get hashed token
-    const resetPasswordToken = crypto.createHash('sha256').update(req.body.token).digest('hex');
+    const resetPasswordToken = crypto
+      .createHash("sha256")
+      .update(req.body.token)
+      .digest("hex");
 
     const user = await User.findOne({
       resetPasswordToken,
-      resetPasswordExpire: { $gt: Date.now() } // Ensure token hasn't expired
+      resetPasswordExpire: { $gt: Date.now() }, // Ensure token hasn't expired
     });
 
     if (!user) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired token' });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid or expired token" });
     }
 
     // Set new password
     user.password = req.body.newPassword;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
-    
+
     await user.save();
 
-    res.status(200).json({ success: true, message: 'Password reset successful!' });[cite: 1]
+    res
+      .status(200)
+      .json({ success: true, message: "Password reset successful!" });
+    [cite, 1];
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -189,14 +207,57 @@ export const verifyEmail = async (req, res) => {
     const user = await User.findOne({ emailVerificationToken: token });
 
     if (!user) {
-      return res.status(400).json({ success: false, message: 'Invalid or expired verification token' });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message: "Invalid or expired verification token",
+        });
     }
 
     user.isEmailVerified = true;
     user.emailVerificationToken = undefined;
     await user.save();
 
-    res.status(200).json({ success: true, message: 'Email verified successfully' });
+    res
+      .status(200)
+      .json({ success: true, message: "Email verified successfully" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Admin Login
+// @route   POST /api/auth/admin-login
+// @access  Public
+export const adminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email });
+
+    // Validate user exists, password matches, and role is admin
+    if (user && (await user.matchPassword(password)) && user.role === "admin") {
+      // Session management: Auto-logout after 1 hour of inactivity
+      const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+        expiresIn: "1h",
+      });
+
+      res.json({
+        success: true,
+        token,
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        },
+      });
+    } else {
+      res
+        .status(401)
+        .json({ success: false, message: "Invalid admin credentials" });
+    }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
