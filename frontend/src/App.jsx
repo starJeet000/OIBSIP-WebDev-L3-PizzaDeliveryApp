@@ -4,6 +4,7 @@ import {
   Routes,
   Route,
   Navigate,
+  useLocation,
 } from "react-router-dom";
 
 // Global Components
@@ -24,16 +25,26 @@ import PizzaBuilder from "./components/PizzaBuilder";
 import OrderSummary from "./components/OrderSummary";
 import OrderTracking from "./pages/OrderTracking";
 
-// Feature 4.1 & 4.2: Admin Login & Dashboard
+// Feature 4.1 & 4.2: Admin Panel
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 
-function App() {
+// Layout wrapper to completely separate Admin UI from User UI
+const AppLayout = ({ children }) => {
+  const location = useLocation();
+  const isAdminRoute = location.pathname.startsWith("/admin");
+
+  // If we are on an admin page, return ONLY the admin component.
+  // No user nav, no cart, no user background wrappers.
+  if (isAdminRoute) {
+    return <>{children}</>;
+  }
+
+  // Otherwise, render the standard User UI layout
   return (
-    <Router>
+    <>
       <Navigation />
       <CartDrawer />
-
       <main
         style={{
           minHeight: "calc(100vh - 70px)",
@@ -41,6 +52,16 @@ function App() {
           paddingBottom: "40px",
         }}
       >
+        {children}
+      </main>
+    </>
+  );
+};
+
+function App() {
+  return (
+    <Router>
+      <AppLayout>
         <Routes>
           {/* Default Route */}
           <Route path="/" element={<Navigate to="/dashboard" />} />
@@ -59,11 +80,11 @@ function App() {
           <Route path="/checkout" element={<OrderSummary />} />
           <Route path="/orders/:id/success" element={<OrderTracking />} />
 
-          {/* Admin Login & Dashboard Routes */}
+          {/* Admin Routes */}
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
         </Routes>
-      </main>
+      </AppLayout>
     </Router>
   );
 }

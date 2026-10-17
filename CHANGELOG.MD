@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased] - 2026/10/17
+
+### Added
+
+- **Feature 4.2: Admin Dashboard**
+  - **Analytics UI:** Built `AdminDashboard.jsx` featuring dynamic metric cards (Revenue, Active Orders, New Users).
+  - **Data Visualization:** Integrated `recharts` to render a 7-day revenue line chart, an hourly order volume area chart, and a top-selling pizzas bar chart.
+  - **Layout Isolation:** Implemented a clean CSS reset and an `AppLayout` wrapper to completely decouple the Admin UI from the User UI navigation and global wrappers.
+  - **Backend Aggregation:** Developed the `getDashboardMetrics` controller to dynamically calculate real-time platform statistics from MongoDB collections.
+
+- **Feature 4.1: Admin Authentication**
+  - **Role-Based Access Control:** Implemented backend `admin` middleware to strictly protect administrative routes.
+  - **Dedicated Login Flow:** Created `/admin/login` page isolated from user registration, enforcing a 1-hour auto-logout JWT session limit.
+  - **Database Seeding:** Created `seedAdmin.js` utility to securely generate initial administrative credentials bypassing standard registration.
+
 ## [Unreleased] - 2026/10/16
 
 - **Fix: React Router Import Resolution**
@@ -7,13 +22,13 @@
 
 ### Added
 
-- **Feature 4.2: Admin Dashboard Complete**
+- **Feature 4.2: Admin Dashboard**
   - **Analytics UI:** Built `AdminDashboard.jsx` featuring dynamic metric cards (Revenue, Active Orders, New Users).
   - **Data Visualization:** Integrated `recharts` to render a 7-day revenue trend line chart and a top-selling pizzas bar chart.
   - **Admin Navigation:** Created a dedicated secure sidebar for routing between Inventory, Orders, and System metrics.
   - **Backend Aggregation:** Developed the `getDashboardMetrics` controller to dynamically calculate real-time platform statistics from MongoDB collections.
 
-- **Feature 4.1: Admin Authentication Complete**
+- **Feature 4.1: Admin Authentication**
   - **Role-Based Access Control:** Implemented backend `admin` middleware to strictly protect administrative routes.
   - **Dedicated Login Flow:** Created `/admin/login` page isolated from user registration, enforcing a 1-hour auto-logout JWT session limit.
 

@@ -1,7 +1,7 @@
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import sendEmail from "../services/emailService.js";
+import sendMail from "../services/emailService.js";
 
 // @desc    Register a new user
 // @route   POST /api/auth/register
@@ -137,7 +137,7 @@ export const forgotPassword = async (req, res) => {
     `;
 
     try {
-      await sendEmail({
+      await sendMail({
         email: user.email,
         subject: "Password Reset Token",
         message,
@@ -207,12 +207,10 @@ export const verifyEmail = async (req, res) => {
     const user = await User.findOne({ emailVerificationToken: token });
 
     if (!user) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message: "Invalid or expired verification token",
-        });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired verification token",
+      });
     }
 
     user.isEmailVerified = true;

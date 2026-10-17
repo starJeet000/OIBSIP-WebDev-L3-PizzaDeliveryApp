@@ -1,20 +1,22 @@
 import nodemailer from "nodemailer";
 
-export const sendEmail = async (options) => {
+const sendMail = async (options) => {
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD,
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS,
     },
   });
 
   const mailOptions = {
-    from: `"Pizza Delivery Admin" <${process.env.GMAIL_USER}>`,
+    from: `"PizzaDash Orders" <${process.env.EMAIL_USER}>`,
     to: options.email,
     subject: options.subject,
-    html: options.message,
+    html: options.html,
   };
 
   await transporter.sendMail(mailOptions);
 };
+
+export default sendMail;

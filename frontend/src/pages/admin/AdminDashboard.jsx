@@ -10,6 +10,8 @@ import {
   ResponsiveContainer,
   BarChart,
   Bar,
+  Area,
+  AreaChart,
 } from "recharts";
 import api from "../../services/api";
 
@@ -132,9 +134,11 @@ const AdminDashboard = () => {
             justifyContent: "space-between",
             alignItems: "center",
             marginBottom: "30px",
+            flexWrap: "wrap",
+            gap: "15px",
           }}
         >
-          <h1 style={{ margin: 0, color: "#333" }}>
+          <h1 style={{ margin: 0, color: "#333", fontSize: "24px" }}>
             Admin Dashboard - {dateStr}
           </h1>
         </div>
@@ -265,7 +269,7 @@ const AdminDashboard = () => {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "2fr 1fr",
+            gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))",
             gap: "20px",
           }}
         >
@@ -301,6 +305,37 @@ const AdminDashboard = () => {
                     activeDot={{ r: 8 }}
                   />
                 </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Hourly Orders Chart (The missing checklist item) */}
+          <div
+            style={{
+              backgroundColor: "#fff",
+              padding: "20px",
+              borderRadius: "8px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            }}
+          >
+            <h3 style={{ margin: "0 0 20px 0", color: "#333" }}>
+              Orders Per Hour (Today)
+            </h3>
+            <div style={{ height: "300px" }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data.charts.ordersPerHour}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="time" axisLine={false} tickLine={false} />
+                  <YAxis axisLine={false} tickLine={false} />
+                  <Tooltip />
+                  <Area
+                    type="monotone"
+                    dataKey="orders"
+                    stroke="#faad14"
+                    fill="#fffbe6"
+                    strokeWidth={3}
+                  />
+                </AreaChart>
               </ResponsiveContainer>
             </div>
           </div>

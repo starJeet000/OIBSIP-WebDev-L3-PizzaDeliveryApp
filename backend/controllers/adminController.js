@@ -48,6 +48,17 @@ export const getDashboardMetrics = async (req, res) => {
       { name: "Hawaiian", count: 50 },
     ];
 
+    const ordersPerHour = [
+      { time: "10 AM", orders: 5 },
+      { time: "11 AM", orders: 15 },
+      { time: "12 PM", orders: 35 },
+      { time: "1 PM", orders: 28 },
+      { time: "2 PM", orders: 12 },
+      { time: "3 PM", orders: 8 },
+      { time: "4 PM", orders: 10 },
+      { time: "5 PM", orders: 22 },
+    ];
+
     res.status(200).json({
       success: true,
       metrics: {
@@ -60,6 +71,7 @@ export const getDashboardMetrics = async (req, res) => {
       charts: {
         dailyRevenueTrend,
         topPizzas,
+        ordersPerHour,
       },
     });
   } catch (error) {
