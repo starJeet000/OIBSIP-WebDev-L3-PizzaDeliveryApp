@@ -1,5 +1,6 @@
 import Order from "../models/Order.js";
 import sendMail from "../utils/sendmail.js";
+import { depleteStockForOrder } from "./inventoryController.js";
 
 // @desc    Create new order
 // @route   POST /api/orders/create
@@ -66,7 +67,8 @@ export const createOrder = async (req, res) => {
       // We log the error but don't return an error response, as the order was successful
     }
 
-    // TODO: Note: Automated Stock Depletion will be integrated here during the Admin phase[cite: 1]
+    // Trigger background stock depletion
+    await depleteStockForOrder(savedOrder.orderItems, savedOrder._id);
 
     res.status(201).json({
       success: true,

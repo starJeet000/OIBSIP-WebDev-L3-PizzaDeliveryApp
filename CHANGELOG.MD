@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased] - 2026/10/21
+
+### Added
+
+- **Feature 4.4: Automated Stock Notifications**
+  - **Email Engine:** Configured `nodemailer` with a Gmail SMTP transport to dispatch professional HTML low-stock alerts directly to the admin.
+  - **Cron Scheduling:** Integrated `node-cron` to execute a background inventory audit every hour (`0 * * * *`), utilizing a `lastNotificationSentAt` timestamp to prevent email spam.
+  - **Order Depletion Engine:** Engineered the `depleteStockForOrder` controller to parse custom pizza configurations upon successful checkout, automatically deducting the exact bases, sauces, cheeses, and vegetables from the active MongoDB inventory.
+
+- **Feature 4.3: Inventory Management Dashboard**
+  - **Tabular Interface:** Built `InventoryDashboard.jsx` to display all ingredients (Bases, Sauces, Cheeses, Veggies) with server-side pagination (20 items/page).
+  - **Visual Status Indicators:** Implemented dynamic stock badges (Green=OK, Yellow=Low, Red=Critical) based on individual minimum thresholds.
+  - **Stock Update Form:** Created an interactive side-panel to manually Add or Set stock quantities, complete with reason/notes tracking and MongoDB audit trails.
+  - **System Alerts UI:** Added a real-time notification bell and modal to the Admin Dashboard to immediately flag ingredients falling below safe levels.
+
 ## [Unreleased] - 2026/10/17
 
 ### Added

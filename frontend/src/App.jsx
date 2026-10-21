@@ -28,6 +28,7 @@ import OrderTracking from "./pages/OrderTracking";
 // Feature 4.1 & 4.2: Admin Panel
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import InventoryDashboard from "./pages/admin/InventoryDashboard";
 
 // Layout wrapper to completely separate Admin UI from User UI
 const AppLayout = ({ children }) => {
@@ -35,7 +36,6 @@ const AppLayout = ({ children }) => {
   const isAdminRoute = location.pathname.startsWith("/admin");
 
   // If we are on an admin page, return ONLY the admin component.
-  // No user nav, no cart, no user background wrappers.
   if (isAdminRoute) {
     return <>{children}</>;
   }
@@ -83,6 +83,7 @@ function App() {
           {/* Admin Routes */}
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/admin/inventory" element={<InventoryDashboard />} />
         </Routes>
       </AppLayout>
     </Router>

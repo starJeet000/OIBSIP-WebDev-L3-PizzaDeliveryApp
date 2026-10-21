@@ -1,3 +1,4 @@
+import "./services/inventoryMonitor.js";
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -8,6 +9,7 @@ import pizzaRoutes from "./routes/pizzaRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import inventoryRoutes from "./routes/inventoryRoutes.js";
 
 // Load environment variables
 dotenv.config();
@@ -35,6 +37,7 @@ app.use("/api/pizzas", pizzaRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/inventory", inventoryRoutes);
 
 const PORT = process.env.PORT || 5000;
 
