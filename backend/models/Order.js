@@ -50,6 +50,7 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
+      required: true,
       enum: [
         "Order Received",
         "In Kitchen",
@@ -59,15 +60,33 @@ const orderSchema = new mongoose.Schema(
       ],
       default: "Order Received",
     },
-    statusHistory: [
+    statusTimeline: [
       {
         status: String,
         timestamp: { type: Date, default: Date.now },
-        updatedBy: String, // system or admin email
+        note: String,
       },
     ],
+    internalNotes: { type: String },
+    cancellationDetails: {
+      reason: { type: String },
+      notes: { type: String },
+      refunded: { type: Boolean, default: false },
+      cancelledAt: { type: Date },
+    },
   },
   { timestamps: true },
 );
+
+// Pre-save middleware to initialize timeline on new orders
+orderSchema.pre("save", function (next) {
+  if (this.isNew && this.statusTimeline.length === 0) {
+    this.statusTimeline.push({
+      status: "Order Received",
+      timestamp: new Date(),
+    });
+  }
+  next();
+});
 
 export default mongoose.model("Order", orderSchema);

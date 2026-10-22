@@ -11,24 +11,25 @@ import {
 import Navigation from "./components/Navigation";
 import CartDrawer from "./components/CartDrawer";
 
-// Feature 3.1: Auth Components
+// Auth Components
 import LoginForm from "./components/LoginForm";
 import RegisterForm from "./components/RegisterForm";
 
-// Feature 3.2 & 3.6: Dashboards & Profile
+// Dashboards & Profile
 import UserDashboard from "./components/UserDashboard";
 import UserProfile from "./pages/UserProfile";
 import OrderHistory from "./pages/OrderHistory";
 
-// Feature 3.3, 3.4 & 3.5: Ordering Flow
+// Ordering Flow
 import PizzaBuilder from "./components/PizzaBuilder";
 import OrderSummary from "./components/OrderSummary";
 import OrderTracking from "./pages/OrderTracking";
 
-// Feature 4.1 & 4.2: Admin Panel
+// Admin Panel
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import InventoryDashboard from "./pages/admin/InventoryDashboard";
+import AdminOrders from "./pages/admin/AdminOrders";
 
 // Layout wrapper to completely separate Admin UI from User UI
 const AppLayout = ({ children }) => {
@@ -84,6 +85,7 @@ function App() {
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/inventory" element={<InventoryDashboard />} />
+          <Route path="/admin/orders" element={<AdminOrders />} />
         </Routes>
       </AppLayout>
     </Router>

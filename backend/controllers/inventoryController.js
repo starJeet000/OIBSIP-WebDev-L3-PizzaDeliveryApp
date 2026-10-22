@@ -152,3 +152,41 @@ export const depleteStockForOrder = async (orderItems, orderId) => {
     console.error("Inventory Depletion Error:", error);
   }
 };
+
+// @desc    Restock inventory for cancelled orders
+// @access  Internal Helper
+export const restockForOrder = async (orderItems, orderId) => {
+  try {
+    const ingredientsToRestock = [];
+
+    orderItems.forEach((item) => {
+      const qty = item.qty || 1;
+      if (item.base) ingredientsToRestock.push({ name: item.base, qty });
+      if (item.sauce) ingredientsToRestock.push({ name: item.sauce, qty });
+      if (item.cheese) ingredientsToRestock.push({ name: item.cheese, qty });
+      if (item.veggies && Array.isArray(item.veggies)) {
+        item.veggies.forEach((veg) =>
+          ingredientsToRestock.push({ name: veg, qty }),
+        );
+      }
+    });
+
+    for (const ingredient of ingredientsToRestock) {
+      const dbItem = await Inventory.findOne({ name: ingredient.name });
+      if (dbItem) {
+        dbItem.quantity += ingredient.qty;
+        dbItem.auditTrail.push({
+          action: "Add",
+          amount: ingredient.qty,
+          previousQuantity: dbItem.quantity - ingredient.qty,
+          newQuantity: dbItem.quantity,
+          notes: `Restock from Cancelled Order ID: ${orderId}`,
+          timestamp: new Date(),
+        });
+        await dbItem.save();
+      }
+    }
+  } catch (error) {
+    console.error("Inventory Restock Error:", error);
+  }
+};

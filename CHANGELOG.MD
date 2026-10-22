@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased] - 2026/10/22
+
+### Added
+
+- **Feature 4.5: Order Management Dashboard & Automated Refunds**
+  - **Orders List View:** Built `AdminOrders.jsx` with a responsive tabular view featuring server-side pagination (15 orders/page), color-coded status badges, real-time sorting (Date, Amount), and search by Order ID.
+  - **Order Details Modal:** Created an interactive modal displaying complete customer info, delivery addresses, custom pizza configurations (Base, Sauce, Cheese, Veggies), financial summary, and a dedicated "Print for Kitchen" layout.
+  - **Sequential Status Workflow:** Enforced strict status transitions (`Order Received` → `In Kitchen` → `Sent to Delivery` → `Delivered`) backed by `nodemailer` email notifications dispatched to customers on each state change.
+  - **Order Cancellation & Inventory Restock:** Implemented admin-only cancellations for active orders with reason tracking, automatically returning depleted ingredients back to the MongoDB inventory via `restockForOrder`.
+  - **Automated Razorpay Refunds:** Integrated the `razorpay.payments.refund()` API directly into the cancellation flow, calculating sub-unit paise amounts and automatically dispatching instant payment refunds to customers upon order cancellation.
+
 ## [Unreleased] - 2026/10/21
 
 ### Added

@@ -1,6 +1,10 @@
 import Order from "../models/Order.js";
 import sendMail from "../utils/sendmail.js";
-import { depleteStockForOrder } from "./inventoryController.js";
+import {
+  depleteStockForOrder,
+  restockForOrder,
+} from "./inventoryController.js";
+import Razorpay from "razorpay";
 
 // @desc    Create new order
 // @route   POST /api/orders/create
@@ -190,6 +194,208 @@ export const getMyOrders = async (req, res) => {
       totalPages: Math.ceil(total / Number(limit)),
       totalOrders: total,
     });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get all orders (Admin with Filtering, Sorting, Pagination)
+// @route   GET /api/orders/admin
+// @access  Private/Admin
+export const getAdminOrders = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 15;
+    const skip = (page - 1) * limit;
+
+    // Build Query Filters
+    let query = {};
+    if (req.query.status) query.status = req.query.status;
+    if (req.query.search) {
+      // Allow searching by exact Order ID
+      if (req.query.search.match(/^[0-9a-fA-F]{24}$/)) {
+        query._id = req.query.search;
+      }
+    }
+    if (req.query.startDate && req.query.endDate) {
+      query.createdAt = {
+        $gte: new Date(req.query.startDate),
+        $lte: new Date(req.query.endDate),
+      };
+    }
+
+    // Build Sorting
+    let sortConfig = { createdAt: -1 }; // Default: Newest first
+    if (req.query.sort === "oldest") sortConfig = { createdAt: 1 };
+    if (req.query.sort === "highest") sortConfig = { totalPrice: -1 };
+    if (req.query.sort === "lowest") sortConfig = { totalPrice: 1 };
+
+    const total = await Order.countDocuments(query);
+    const orders = await Order.find(query)
+      .populate("user", "name email phone")
+      .sort(sortConfig)
+      .skip(skip)
+      .limit(limit);
+
+    res.status(200).json({
+      success: true,
+      orders,
+      page,
+      totalPages: Math.ceil(total / limit),
+      totalOrders: total,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Update order status
+// @route   PUT /api/orders/:id/status
+// @access  Private/Admin
+export const updateOrderStatus = async (req, res) => {
+  try {
+    const { status, note } = req.body;
+    const order = await Order.findById(req.params.id).populate(
+      "user",
+      "name email",
+    );
+
+    if (!order)
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+
+    // Sequential Validation Map
+    const validTransitions = {
+      "Order Received": ["In Kitchen", "Cancelled"],
+      "In Kitchen": ["Sent to Delivery", "Cancelled"],
+      "Sent to Delivery": ["Delivered"],
+      Delivered: [],
+      Cancelled: [],
+    };
+
+    if (!validTransitions[order.status].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status transition from ${order.status} to ${status}`,
+      });
+    }
+
+    order.status = status;
+    order.statusTimeline.push({ status, timestamp: new Date(), note });
+    await order.save();
+
+    // Optional Customer Email Notification
+    if (["In Kitchen", "Sent to Delivery", "Delivered"].includes(status)) {
+      await sendMail({
+        email: order.user.email,
+        subject: `PizzaDash Update: Order ${status}`,
+        html: `<h2>Order Update</h2><p>Hi ${order.user.name}, your order status is now: <strong>${status}</strong>.</p>`,
+      });
+    }
+
+    res.status(200).json({ success: true, order });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Cancel order (Admin)
+// @route   PUT /api/orders/:id/cancel
+// @access  Private/Admin
+export const cancelOrder = async (req, res) => {
+  try {
+    const { reason, notes, refund } = req.body;
+    const order = await Order.findById(req.params.id).populate(
+      "user",
+      "name email",
+    );
+
+    if (!order)
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+
+    // Can only cancel if not yet dispatched
+    if (!["Order Received", "In Kitchen"].includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot cancel order in ${order.status} stage.`,
+      });
+    }
+
+    order.status = "Cancelled";
+    order.cancellationDetails = {
+      reason,
+      notes,
+      refunded: refund,
+      cancelledAt: new Date(),
+    };
+    order.statusTimeline.push({
+      status: "Cancelled",
+      timestamp: new Date(),
+      note: reason,
+    });
+
+    // Restock Inventory
+    await restockForOrder(order.orderItems, order._id);
+
+    // --- NEW: Process Automated Razorpay Refund ---
+    if (refund && order.isPaid && order.paymentResult?.id) {
+      try {
+        const instance = new Razorpay({
+          key_id: process.env.RAZORPAY_KEY_ID,
+          key_secret: process.env.RAZORPAY_KEY_SECRET,
+        });
+
+        // Razorpay expects the refund amount in the smallest currency sub-unit (paise)
+        await instance.payments.refund(order.paymentResult.id, {
+          amount: Math.round(order.totalPrice * 100),
+        });
+
+        // Ensure the database reflects the successful refund
+        order.cancellationDetails.refunded = true;
+      } catch (refundError) {
+        console.error("Razorpay Refund Error:", refundError);
+        return res.status(500).json({
+          success: false,
+          message:
+            "Inventory restocked, but automated Razorpay refund failed. Please process the refund manually via the Razorpay Dashboard.",
+        });
+      }
+    }
+    // ----------------------------------------------
+
+    await order.save();
+
+    // Notify Customer
+    await sendMail({
+      email: order.user.email,
+      subject: `PizzaDash: Order Cancelled`,
+      html: `<h2>Order Cancelled</h2><p>Hi ${order.user.name}, unfortunately your order has been cancelled. Reason: ${reason}. ${refund ? "A refund has been initiated." : ""}</p>`,
+    });
+
+    res.status(200).json({ success: true, order });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get order by ID
+// @route   GET /api/orders/:id
+// @access  Private
+export const getOrderById = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id).populate(
+      "user",
+      "name email",
+    );
+
+    if (order) {
+      res.status(200).json(order);
+    } else {
+      res.status(404).json({ success: false, message: "Order not found" });
+    }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
