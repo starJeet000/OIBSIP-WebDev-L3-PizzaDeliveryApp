@@ -3,30 +3,39 @@ import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import api from "../services/api";
 
+// Helper to load Razorpay SDK dynamically
+const loadRazorpay = () => {
+  return new Promise((resolve) => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
 const OrderSummary = () => {
   const navigate = useNavigate();
   const { cartItems, getSubtotal, setIsCartOpen } = useCart();
 
-  // Pricing Calculations[cite: 1]
-  const subtotal = getSubtotal();
-  const tax = Math.round(subtotal * 0.05); // Tax calculation (5% of subtotal)[cite: 1]
-  const deliveryFee = subtotal > 0 ? 50 : 0; // Delivery fee (fixed amount)[cite: 1]
-  const grandTotal = subtotal + tax + deliveryFee; // Grand Total[cite: 1]
+  // Safely calculate pricing to prevent NaN errors from crashing Razorpay
+  const subtotal = Number(getSubtotal()) || 0;
+  const tax = Math.round(subtotal * 0.05);
+  const deliveryFee = subtotal > 0 ? 50 : 0;
+  const grandTotal = subtotal + tax + deliveryFee;
 
-  // Form States
   const [formData, setFormData] = useState({
     street: "",
     city: "",
     postalCode: "",
     phone: "",
-    instructions: "", // Delivery instructions (optional)[cite: 1]
+    instructions: "",
   });
-  const [saveAddress, setSaveAddress] = useState(false); // Save address for future orders (checkbox)[cite: 1]
-  const [paymentMethod, setPaymentMethod] = useState("razorpay"); // Payment method selection (currently Razorpay only)[cite: 1]
+  const [saveAddress, setSaveAddress] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("razorpay");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Pre-fill user data if available
   useEffect(() => {
     const userStr =
       localStorage.getItem("user") || sessionStorage.getItem("user");
@@ -41,7 +50,6 @@ const OrderSummary = () => {
       }));
     }
 
-    // Redirect if cart is empty
     if (cartItems.length === 0) {
       navigate("/dashboard");
     }
@@ -54,13 +62,16 @@ const OrderSummary = () => {
 
   const handleBackToCart = () => {
     setIsCartOpen(true);
-    navigate(-1); // Back to Cart button[cite: 1]
+    navigate(-1);
   };
 
   const handleProceedToPayment = async (e) => {
     e.preventDefault();
 
-    // Validate required fields
+    if (grandTotal <= 0) {
+      return setError("Your cart total is invalid.");
+    }
+
     if (
       !formData.street ||
       !formData.city ||
@@ -73,7 +84,7 @@ const OrderSummary = () => {
     setLoading(true);
 
     try {
-      // If user checked "Save address", update their profile[cite: 1]
+      // 1. Save Address if requested
       if (saveAddress) {
         await api.put("/users/profile", {
           phone: formData.phone,
@@ -84,7 +95,6 @@ const OrderSummary = () => {
           },
         });
 
-        // Update local storage
         const userStr =
           localStorage.getItem("user") || sessionStorage.getItem("user");
         if (userStr) {
@@ -101,12 +111,83 @@ const OrderSummary = () => {
         }
       }
 
-      // Feature 3.5 Placeholder: Initialize Razorpay flow here[cite: 1]
-      console.log("Proceeding to Razorpay with Grand Total:", grandTotal);
-      alert(`Redirecting to Razorpay to pay ₹${grandTotal}...`);
+      // 2. Load Razorpay Script
+      const isRazorpayLoaded = await loadRazorpay();
+      if (!isRazorpayLoaded) {
+        setError("Razorpay SDK failed to load. Are you online?");
+        setLoading(false);
+        return;
+      }
+
+      // 3. Generate a secure Razorpay Order ID from your backend to prevent iframe loops
+      const { data: paymentData } = await api.post("/payments/razorpay/order", {
+        amount: Math.round(grandTotal * 100),
+      });
+
+      // 4. Initialize Razorpay Options
+      const options = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_ToHdrm13xItaG7",
+        amount: Math.round(grandTotal * 100),
+        currency: "INR",
+        name: "PizzaDash",
+        description: "Pizza Order Checkout",
+        order_id: paymentData.razorpayOrderId, // Secure ID handshake
+        handler: async function (response) {
+          try {
+            // Payment Successful -> Create Order in Database
+            const orderPayload = {
+              items: cartItems,
+              deliveryAddress: {
+                address: formData.street,
+                city: formData.city,
+                postalCode: formData.postalCode,
+                instructions: formData.instructions,
+              },
+              pricing: { subtotal, tax, deliveryFee, grandTotal },
+              payment: {
+                method: "Razorpay",
+                transactionId: response.razorpay_payment_id,
+              },
+            };
+
+            const createRes = await api.post("/orders/create", orderPayload);
+
+            if (createRes.data.success) {
+              navigate(`/orders/${createRes.data._id}/success`);
+            }
+          } catch (err) {
+            setError(
+              "Payment successful, but failed to save order to database. Please contact support.",
+            );
+            setLoading(false); // Stop loading on API failure
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            // Stop the loading spinner if the user closes the payment window
+            setLoading(false);
+          },
+        },
+        prefill: {
+          contact: formData.phone,
+        },
+        theme: {
+          color: "#52c41a",
+        },
+      };
+
+      // 5. Open Razorpay Window
+      const paymentObject = new window.Razorpay(options);
+
+      // Catch modal errors so loading state resets cleanly
+      paymentObject.on("payment.failed", function (response) {
+        setError("Payment failed: " + response.error.description);
+        setLoading(false);
+      });
+
+      paymentObject.open();
     } catch (err) {
       setError("Failed to process checkout. Please try again.");
-    } finally {
       setLoading(false);
     }
   };
@@ -152,7 +233,6 @@ const OrderSummary = () => {
           >
             <h3 style={{ margin: "0 0 15px 0" }}>Delivery Address</h3>
 
-            {/* Address field (street, city, postal code)[cite: 1] */}
             <div style={{ marginBottom: "15px" }}>
               <label style={{ display: "block", marginBottom: "5px" }}>
                 Street Address *
@@ -211,7 +291,6 @@ const OrderSummary = () => {
               </div>
             </div>
 
-            {/* Phone number[cite: 1] */}
             <div style={{ marginBottom: "15px" }}>
               <label style={{ display: "block", marginBottom: "5px" }}>
                 Phone Number *
@@ -231,7 +310,6 @@ const OrderSummary = () => {
               />
             </div>
 
-            {/* Delivery instructions (optional)[cite: 1] */}
             <div style={{ marginBottom: "15px" }}>
               <label style={{ display: "block", marginBottom: "5px" }}>
                 Delivery Instructions (Optional)
@@ -251,7 +329,6 @@ const OrderSummary = () => {
               />
             </div>
 
-            {/* Save address for future orders (checkbox)[cite: 1] */}
             <label
               style={{
                 display: "flex",
@@ -372,7 +449,7 @@ const OrderSummary = () => {
           >
             {cartItems.map((item) => (
               <div
-                key={item.cartItemId}
+                key={item.cartItemId || item.name}
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
@@ -383,7 +460,6 @@ const OrderSummary = () => {
               >
                 <div style={{ flex: 1, paddingRight: "15px" }}>
                   <div style={{ fontWeight: "bold" }}>{item.name}</div>
-
                   {item.customizations && (
                     <div
                       style={{

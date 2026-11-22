@@ -1,26 +1,35 @@
+import Razorpay from "razorpay";
 import crypto from "crypto";
-import { razorpayInstance } from "../config/razorpay.js";
+import dotenv from "dotenv";
 
-// @desc    Create a Razorpay Order
+dotenv.config();
+
+// Initialize Razorpay Instance
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
+
+// @desc    Create Razorpay Order (Secure Handshake)
 // @route   POST /api/payments/razorpay/order
 // @access  Private
 export const createRazorpayOrder = async (req, res) => {
   try {
-    const { amount, receiptId } = req.body; // amount expects the value in INR
+    const { amount } = req.body;
+
+    if (!amount) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Amount is required" });
+    }
 
     const options = {
-      amount: amount * 100, // Razorpay expects amount in minimum currency units (paise)
+      amount: amount, // Amount is already multiplied by 100 (in paise) from the frontend
       currency: "INR",
-      receipt: receiptId || `receipt_${Date.now()}`,
+      receipt: `receipt_${Date.now()}`,
     };
 
-    const order = await razorpayInstance.orders.create(options);
-
-    if (!order) {
-      return res
-        .status(500)
-        .json({ success: false, message: "Failed to create Razorpay order" });
-    }
+    const order = await razorpay.orders.create(options);
 
     res.status(200).json({
       success: true,
@@ -29,7 +38,13 @@ export const createRazorpayOrder = async (req, res) => {
       currency: order.currency,
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    console.error("Razorpay Order Generation Error:", error);
+    res
+      .status(500)
+      .json({
+        success: false,
+        message: "Failed to generate Razorpay order ID",
+      });
   }
 };
 
@@ -40,28 +55,23 @@ export const verifyRazorpayPayment = async (req, res) => {
   try {
     const { razorpayOrderId, razorpayPaymentId, razorpaySignature } = req.body;
 
-    // Create the expected signature using our secret key
-    const body = razorpayOrderId + "|" + razorpayPaymentId;
-    const expectedSignature = crypto
+    const sign = razorpayOrderId + "|" + razorpayPaymentId;
+    const expectedSign = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      .update(body.toString())
+      .update(sign.toString())
       .digest("hex");
 
-    // Compare the signatures
-    const isAuthentic = expectedSignature === razorpaySignature;
-
-    if (isAuthentic) {
-      res.status(200).json({
-        success: true,
-        message: "Payment verified successfully", // Verifies the payment[cite: 1]
-      });
+    if (razorpaySignature === expectedSign) {
+      return res
+        .status(200)
+        .json({ success: true, message: "Payment verified successfully" });
     } else {
-      res.status(400).json({
-        success: false,
-        message: "Invalid payment signature",
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid signature sent!" });
     }
   } catch (error) {
+    console.error("Razorpay Verification Error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

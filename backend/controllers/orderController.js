@@ -19,45 +19,67 @@ export const createOrder = async (req, res) => {
         .json({ success: false, message: "No order items provided" });
     }
 
-    // Auto-generate unique order ID[cite: 1]
     const orderId = `ORD-${Date.now()}`;
 
+    // 1. Sanitize and Map Items precisely to the Order.js schema requirements
+    const sanitizedItems = items.map((item) => ({
+      pizzaType: item.name,
+      quantity: item.quantity,
+      unitPrice: item.price,
+      totalPrice: item.price * item.quantity,
+      customizations: {
+        base: item.customizations?.base || {},
+        sauce: item.customizations?.sauce || {},
+        cheese: item.customizations?.cheese || {},
+        vegetables: item.customizations?.vegetables || [],
+      },
+    }));
+
+    // 2. Build order using strictly valid schema fields
     const order = new Order({
       orderId,
       userId: req.user._id,
-      items,
-      deliveryAddress,
-      pricing,
+      items: sanitizedItems,
+      deliveryAddress: {
+        street: deliveryAddress.address,
+        city: deliveryAddress.city,
+        postalCode: deliveryAddress.postalCode,
+        instructions: deliveryAddress.instructions,
+      },
+      pricing: {
+        subtotal: pricing.subtotal,
+        tax: pricing.tax,
+        deliveryFee: pricing.deliveryFee,
+        grandTotal: pricing.grandTotal,
+      },
       payment: {
-        ...payment,
-        status: "completed", // We only call this endpoint after Razorpay verifies the payment[cite: 1]
+        method: payment.method || "Razorpay",
+        transactionId: payment.transactionId,
+        status: "completed",
         timestamp: new Date(),
       },
-      statusHistory: [{ status: "Order Received", updatedBy: "System" }],
+      status: "Order Received",
+      statusTimeline: [{ status: "Order Received", timestamp: new Date() }],
     });
 
+    // 3. Save to Database
     const createdOrder = await order.save();
 
-    // Send Order Confirmation Email
+    // 4. Send Order Confirmation Email
     try {
       const emailHtml = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #ff4d4f;">Order Confirmation</h2>
           <p>Hi ${req.user.name},</p>
-          <p>Thank you for ordering from PizzaDash! We have received your order and our kitchen is getting ready to prepare it.</p>
-          
+          <p>Thank you for ordering from PizzaDash! We have received your order.</p>
           <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
             <p style="margin: 0 0 10px 0;"><strong>Order ID:</strong> ${createdOrder.orderId}</p>
-            <p style="margin: 0 0 10px 0;"><strong>Total Amount:</strong> ₹${pricing.grandTotal}</p>
-            <p style="margin: 0;"><strong>Expected Delivery:</strong> 30-45 minutes</p>
+            <p style="margin: 0 0 10px 0;"><strong>Total Amount:</strong> ₹${createdOrder.pricing.grandTotal}</p>
           </div>
-
-          <a href="${process.env.FRONTEND_URL}/orders/${createdOrder._id}/success" 
+          <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/orders/${createdOrder._id}/success" 
              style="display: inline-block; padding: 12px 24px; background-color: #52c41a; color: white; text-decoration: none; border-radius: 4px; font-weight: bold;">
             Track Your Order
           </a>
-          
-          <p style="margin-top: 30px; font-size: 12px; color: #666;">If you have any questions, please reply to this email.</p>
         </div>
       `;
 
@@ -68,18 +90,18 @@ export const createOrder = async (req, res) => {
       });
     } catch (emailError) {
       console.error("Email confirmation could not be sent:", emailError);
-      // We log the error but don't return an error response, as the order was successful
     }
 
-    // Trigger background stock depletion
-    await depleteStockForOrder(savedOrder.orderItems, savedOrder._id);
+    // 5. Trigger background stock depletion (using the sanitized items)
+    await depleteStockForOrder(createdOrder.items, createdOrder._id);
 
+    // 6. Return success
     res.status(201).json({
       success: true,
-      orderId: createdOrder.orderId,
       _id: createdOrder._id,
     });
   } catch (error) {
+    console.error("Order Creation Error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -232,7 +254,7 @@ export const getAdminOrders = async (req, res) => {
 
     const total = await Order.countDocuments(query);
     const orders = await Order.find(query)
-      .populate("user", "name email phone")
+      .populate("userId", "name email phone")
       .sort(sortConfig)
       .skip(skip)
       .limit(limit);
@@ -256,7 +278,7 @@ export const updateOrderStatus = async (req, res) => {
   try {
     const { status, note } = req.body;
     const order = await Order.findById(req.params.id).populate(
-      "user",
+      "userId",
       "name email",
     );
 
@@ -285,6 +307,15 @@ export const updateOrderStatus = async (req, res) => {
     order.statusTimeline.push({ status, timestamp: new Date(), note });
     await order.save();
 
+    // --- Emit WebSocket Event to the specific Order Room ---
+    const io = req.app.get("io");
+    io.to(order._id.toString()).emit("orderStatusUpdated", {
+      orderId: order._id,
+      status: order.status,
+      timeline: order.statusTimeline,
+    });
+    // -----------------------------------------------------------
+
     // Optional Customer Email Notification
     if (["In Kitchen", "Sent to Delivery", "Delivered"].includes(status)) {
       await sendMail({
@@ -307,7 +338,7 @@ export const cancelOrder = async (req, res) => {
   try {
     const { reason, notes, refund } = req.body;
     const order = await Order.findById(req.params.id).populate(
-      "user",
+      "userId",
       "name email",
     );
 
@@ -338,7 +369,7 @@ export const cancelOrder = async (req, res) => {
     });
 
     // Restock Inventory
-    await restockForOrder(order.orderItems, order._id);
+    await restockForOrder(order.items, order._id);
 
     // --- NEW: Process Automated Razorpay Refund ---
     if (refund && order.isPaid && order.paymentResult?.id) {
@@ -370,7 +401,7 @@ export const cancelOrder = async (req, res) => {
 
     // Notify Customer
     await sendMail({
-      email: order.user.email,
+      email: order.userId.email,
       subject: `PizzaDash: Order Cancelled`,
       html: `<h2>Order Cancelled</h2><p>Hi ${order.user.name}, unfortunately your order has been cancelled. Reason: ${reason}. ${refund ? "A refund has been initiated." : ""}</p>`,
     });
@@ -382,20 +413,31 @@ export const cancelOrder = async (req, res) => {
 };
 
 // @desc    Get order by ID
-// @route   GET /api/orders/:id
+// @route   GET /api/orders/:orderId
 // @access  Private
 export const getOrderById = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id).populate(
-      "user",
+    const order = await Order.findById(req.params.orderId).populate(
+      "userId",
       "name email",
     );
 
-    if (order) {
-      res.status(200).json(order);
-    } else {
-      res.status(404).json({ success: false, message: "Order not found" });
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
     }
+
+    if (
+      order.userId._id.toString() !== req.user._id.toString() &&
+      req.user.role !== "admin"
+    ) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Not authorized to view this order" });
+    }
+
+    res.status(200).json(order);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

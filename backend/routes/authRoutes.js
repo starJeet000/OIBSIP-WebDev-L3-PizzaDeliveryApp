@@ -16,5 +16,8 @@ router.post("/login", loginUser);
 router.post("/admin-login", adminLogin);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password", resetPassword);
+router.post("/logout", (req, res) => {
+  res.status(200).json({ success: true, message: "Logged out" });
+});
 
 export default router;

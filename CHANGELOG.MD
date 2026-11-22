@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased] - 2026/10/22
+All notable changes to this project will be documented in this file.
+
+## [Unreleased] - 2026/11/22
 
 ### Added
 
@@ -11,12 +13,25 @@
   - **Order Cancellation & Inventory Restock:** Implemented admin-only cancellations for active orders with reason tracking, automatically returning depleted ingredients back to the MongoDB inventory via `restockForOrder`.
   - **Automated Razorpay Refunds:** Integrated the `razorpay.payments.refund()` API directly into the cancellation flow, calculating sub-unit paise amounts and automatically dispatching instant payment refunds to customers upon order cancellation.
 
+### Fixed
+
+- **Order Creation & Inventory Service Wiring:** Fixed `depleteStockForOrder` and `restockForOrder` imports in `orderController.js` to point to `../services/inventoryService.js`[cite: 1, 2], resolved `order.userId` population access in status update and cancellation handlers[cite: 1], and updated cancellation restocking to use `order.items`[cite: 1].
+- **Order Customization Schema Casting:** Updated `Order.js` customization fields (`base`, `sauce`, `cheese`) to `Mixed` schema types so full customization objects from the frontend save without Mongoose string-casting validation errors.
+- **Order Confirmation Email Credentials:** Verified `EMAIL_USER` and `EMAIL_PASS` environment configuration and Nodemailer transport setup so order confirmation emails send without `Missing credentials for "PLAIN"` errors.
+- **Order Tracking Lookup:** Fixed `getOrderById` in `orderController.js` to read `req.params.orderId` to match `/orders/:orderId` in `orderRoutes.js`[cite: 1, 7], resolving the `"Order not found"` error on `/orders/:id/success`[cite: 3, 4].
+
+## [Unreleased] - 2026/10/22
+
+### Added
+
+- Initialized release history for order management and refund workflows.
+
 ## [Unreleased] - 2026/10/21
 
 ### Added
 
 - **Feature 4.4: Automated Stock Notifications**
-  - **Email Engine:** Configured `nodemailer` with a Gmail SMTP transport to dispatch professional HTML low-stock alerts directly to the admin.
+  - **Email Engine:** Configured `nodemailer` with a Email SMTP transport to dispatch professional HTML low-stock alerts directly to the admin.
   - **Cron Scheduling:** Integrated `node-cron` to execute a background inventory audit every hour (`0 * * * *`), utilizing a `lastNotificationSentAt` timestamp to prevent email spam.
   - **Order Depletion Engine:** Engineered the `depleteStockForOrder` controller to parse custom pizza configurations upon successful checkout, automatically deducting the exact bases, sauces, cheeses, and vegetables from the active MongoDB inventory.
 
@@ -69,7 +84,7 @@
   - **Razorpay Setup:** Configured Razorpay SDK on the Node.js backend with secure cryptographic signature verification (`crypto.createHmac`).
   - **Checkout Flow:** Built the frontend Razorpay modal initialization in `OrderSummary.jsx`, pre-filling user profiles and handling both success (DB creation, cart clearing) and failure (UI error toasts) states.
   - **Order Persistence:** Developed the robust MongoDB `Order` schema to immutably store cart customizations, transaction IDs, and pricing breakdowns post-verification.
-  - **Email Confirmation:** Integrated Nodemailer with Gmail SMTP to automatically dispatch formatted HTML order receipts containing live tracking links upon successful payment verification.
+  - **Email Confirmation:** Integrated Nodemailer with Email SMTP to automatically dispatch formatted HTML order receipts containing live tracking links upon successful payment verification.
 
 ## [Unreleased] - 2026/10/03
 

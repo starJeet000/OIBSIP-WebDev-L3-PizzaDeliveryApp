@@ -1,27 +1,31 @@
 import mongoose from "mongoose";
 
+// Sub-schema for items using Mixed types for customizations to support frontend objects
+const orderItemSchema = new mongoose.Schema(
+  {
+    pizzaType: { type: String, required: true },
+    customizations: {
+      base: { type: mongoose.Schema.Types.Mixed },
+      sauce: { type: mongoose.Schema.Types.Mixed },
+      cheese: { type: mongoose.Schema.Types.Mixed },
+      vegetables: [{ type: String }],
+    },
+    quantity: { type: Number, required: true },
+    unitPrice: { type: Number, required: true },
+    totalPrice: { type: Number, required: true },
+  },
+  { _id: false },
+);
+
 const orderSchema = new mongoose.Schema(
   {
-    orderId: { type: String, required: true, unique: true }, // "ORD-" + timestamp
+    orderId: { type: String, required: true, unique: true },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    items: [
-      {
-        pizzaType: { type: String, required: true }, // Name of the pizza
-        customizations: {
-          base: { type: Object },
-          sauce: { type: Object },
-          cheese: { type: Object },
-          vegetables: [{ type: String }],
-        },
-        quantity: { type: Number, required: true },
-        unitPrice: { type: Number, required: true },
-        totalPrice: { type: Number, required: true },
-      },
-    ],
+    items: [orderItemSchema],
     deliveryAddress: {
       street: { type: String, required: true },
       city: { type: String, required: true },
@@ -64,6 +68,7 @@ const orderSchema = new mongoose.Schema(
       {
         status: String,
         timestamp: { type: Date, default: Date.now },
+        updatedBy: String,
         note: String,
       },
     ],
@@ -79,14 +84,19 @@ const orderSchema = new mongoose.Schema(
 );
 
 // Pre-save middleware to initialize timeline on new orders
-orderSchema.pre("save", function (next) {
-  if (this.isNew && this.statusTimeline.length === 0) {
-    this.statusTimeline.push({
-      status: "Order Received",
-      timestamp: new Date(),
-    });
+orderSchema.pre("save", function () {
+  if (
+    this.isNew &&
+    (!this.statusTimeline || this.statusTimeline.length === 0)
+  ) {
+    this.statusTimeline = [
+      {
+        status: "Order Received",
+        timestamp: new Date(),
+        updatedBy: "System",
+      },
+    ];
   }
-  next();
 });
 
 export default mongoose.model("Order", orderSchema);

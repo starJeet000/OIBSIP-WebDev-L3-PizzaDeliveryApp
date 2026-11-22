@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
+import { io } from "socket.io-client";
 import api from "../services/api";
 
 const OrderTracking = () => {
@@ -8,7 +9,7 @@ const OrderTracking = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Define the strict order of statuses for the visual timeline[cite: 1]
+  // Define the strict order of statuses for the visual timeline
   const timelineSteps = [
     "Order Received",
     "In Kitchen",
@@ -18,7 +19,8 @@ const OrderTracking = () => {
 
   const fetchOrderStatus = async () => {
     try {
-      const { data } = await api.get(`/orders/${id}/status`);
+      // Changed to fetch the full order to get the timeline properly
+      const { data } = await api.get(`/orders/${id}`);
       setOrderData(data);
       setError("");
     } catch (err) {
@@ -29,15 +31,38 @@ const OrderTracking = () => {
   };
 
   useEffect(() => {
-    // Initial fetch
+    // 1. Initial fetch from database
     fetchOrderStatus();
 
-    // OPTION A - Polling: Fetch order status every 10 seconds[cite: 1]
-    const interval = setInterval(() => {
-      fetchOrderStatus();
-    }, 10000);
+    // 2. Initialize WebSocket Connection (Option B)
+    // In production, this should point to your deployed backend URL
+    const socket = io(
+      import.meta.env.VITE_API_URL?.replace("/api", "") ||
+        "http://localhost:5000",
+    );
 
-    return () => clearInterval(interval); // Clean up on unmount
+    // Join the specific order's private room
+    socket.emit("joinOrderRoom", id);
+
+    // Listen for real-time broadcasts from the admin panel
+    socket.on("orderStatusUpdated", (data) => {
+      if (data.orderId === id) {
+        setOrderData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            status: data.status,
+            statusTimeline: data.timeline,
+          };
+        });
+      }
+    });
+
+    // Clean up the socket connection when the user leaves the page
+    return () => {
+      socket.disconnect();
+    };
+    // eslint-disable-next-line
   }, [id]);
 
   if (loading)
@@ -55,9 +80,11 @@ const OrderTracking = () => {
   if (!orderData) return null;
 
   const currentStepIndex = timelineSteps.indexOf(orderData.status);
+  const isCancelled = orderData.status === "Cancelled";
 
   // Time formatting helper
   const formatTime = (dateString) => {
+    if (!dateString) return "--:--";
     return new Date(dateString).toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
@@ -90,117 +117,145 @@ const OrderTracking = () => {
           <p style={{ margin: 0, color: "#666" }}>Order ID: {id}</p>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: "14px", color: "#666" }}>
-            Estimated Delivery
-          </div>
+          <div style={{ fontSize: "14px", color: "#666" }}>Current Status</div>
           <div
-            style={{ fontSize: "24px", fontWeight: "bold", color: "#ff4d4f" }}
+            style={{
+              fontSize: "24px",
+              fontWeight: "bold",
+              color: isCancelled ? "#ff4d4f" : "#52c41a",
+            }}
           >
-            {formatTime(orderData.estimatedDelivery)}
+            {orderData.status}
           </div>
         </div>
       </div>
 
-      {/* Visual Timeline[cite: 1] */}
-      <div
-        style={{ position: "relative", margin: "40px 0", padding: "0 20px" }}
-      >
-        {/* Connecting Background Line */}
+      {/* Visual Timeline - Hidden if Cancelled */}
+      {!isCancelled && (
         <div
-          style={{
-            position: "absolute",
-            top: "20px",
-            left: "40px",
-            right: "40px",
-            height: "4px",
-            backgroundColor: "#eaeaea",
-            zIndex: 1,
-          }}
-        ></div>
-        {/* Active Connecting Line */}
-        <div
-          style={{
-            position: "absolute",
-            top: "20px",
-            left: "40px",
-            height: "4px",
-            backgroundColor: "#52c41a",
-            zIndex: 1,
-            width: `calc(${(currentStepIndex / (timelineSteps.length - 1)) * 100}% - 40px)`,
-          }}
-        ></div>
+          style={{ position: "relative", margin: "40px 0", padding: "0 20px" }}
+        >
+          {/* Connecting Background Line */}
+          <div
+            style={{
+              position: "absolute",
+              top: "20px",
+              left: "40px",
+              right: "40px",
+              height: "4px",
+              backgroundColor: "#eaeaea",
+              zIndex: 1,
+            }}
+          ></div>
+          {/* Active Connecting Line */}
+          <div
+            style={{
+              position: "absolute",
+              top: "20px",
+              left: "40px",
+              height: "4px",
+              backgroundColor: "#52c41a",
+              zIndex: 1,
+              width: `calc(${(Math.max(0, currentStepIndex) / (timelineSteps.length - 1)) * 100}% - 40px)`,
+              transition: "width 0.5s ease-in-out",
+            }}
+          ></div>
 
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              position: "relative",
+              zIndex: 2,
+            }}
+          >
+            {timelineSteps.map((step, index) => {
+              const isCompleted = index <= currentStepIndex;
+              const isCurrent = index === currentStepIndex;
+
+              // Match with the MongoDB backend schema array `statusTimeline`
+              const historyItem = orderData.statusTimeline?.find(
+                (h) => h.status === step,
+              );
+
+              return (
+                <div
+                  key={step}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    width: "120px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "44px",
+                      height: "44px",
+                      borderRadius: "50%",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: isCompleted ? "#52c41a" : "#fff",
+                      border: isCompleted ? "none" : "4px solid #eaeaea",
+                      color: isCompleted ? "#fff" : "#ccc",
+                      fontSize: "20px",
+                      fontWeight: "bold",
+                      marginBottom: "10px",
+                      boxShadow: isCurrent
+                        ? "0 0 0 4px rgba(82, 196, 26, 0.2)"
+                        : "none",
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    {isCompleted ? "✓" : index + 1}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      fontWeight: isCurrent ? "bold" : "normal",
+                      color: isCompleted ? "#333" : "#999",
+                      textAlign: "center",
+                    }}
+                  >
+                    {step}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#888",
+                      marginTop: "5px",
+                    }}
+                  >
+                    {historyItem ? formatTime(historyItem.timestamp) : "--:--"}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Cancellation Notice */}
+      {isCancelled && (
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            position: "relative",
-            zIndex: 2,
+            marginTop: "30px",
+            padding: "20px",
+            backgroundColor: "#fff2f0",
+            border: "1px solid #ffccc7",
+            borderRadius: "8px",
+            color: "#cf1322",
           }}
         >
-          {timelineSteps.map((step, index) => {
-            const isCompleted = index <= currentStepIndex;
-            const isCurrent = index === currentStepIndex;
-
-            // Find timestamp if the step is completed
-            const historyItem = orderData.statusHistory.find(
-              (h) => h.status === step,
-            );
-
-            return (
-              <div
-                key={step}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  width: "120px",
-                }}
-              >
-                <div
-                  style={{
-                    width: "44px",
-                    height: "44px",
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: isCompleted ? "#52c41a" : "#fff",
-                    border: isCompleted ? "none" : "4px solid #eaeaea",
-                    color: isCompleted ? "#fff" : "#ccc",
-                    fontSize: "20px",
-                    fontWeight: "bold",
-                    marginBottom: "10px",
-                    boxShadow: isCurrent
-                      ? "0 0 0 4px rgba(82, 196, 26, 0.2)"
-                      : "none",
-                  }}
-                >
-                  {isCompleted ? "✓" : index + 1}
-                </div>
-                <div
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: isCurrent ? "bold" : "normal",
-                    color: isCompleted ? "#333" : "#999",
-                    textAlign: "center",
-                  }}
-                >
-                  {step}
-                </div>
-                <div
-                  style={{ fontSize: "12px", color: "#888", marginTop: "5px" }}
-                >
-                  {historyItem ? formatTime(historyItem.timestamp) : "--:--"}
-                </div>
-              </div>
-            );
-          })}
+          <strong>Order Cancelled:</strong> This order has been cancelled by the
+          restaurant. If a payment was made, a refund will be initiated to your
+          original payment method shortly.
         </div>
-      </div>
+      )}
 
-      {/* Delivery Person Details (Shows once Sent to Delivery)[cite: 1] */}
-      {orderData.deliveryPerson && (
+      {/* Delivery Person Details (Mocked for UI purposes) */}
+      {currentStepIndex >= 2 && !isCancelled && (
         <div
           style={{
             marginTop: "40px",
@@ -219,32 +274,15 @@ const OrderTracking = () => {
               Your delivery partner is on the way!
             </h4>
             <p style={{ margin: 0, color: "#555" }}>
-              <strong>{orderData.deliveryPerson.name}</strong> •{" "}
-              {orderData.deliveryPerson.phone}
+              Keep your phone nearby. They will call you upon arrival.
             </p>
           </div>
         </div>
       )}
 
-      {orderData.status === "Cancelled" && (
-        <div
-          style={{
-            marginTop: "30px",
-            padding: "20px",
-            backgroundColor: "#fff2f0",
-            border: "1px solid #ffccc7",
-            borderRadius: "8px",
-            color: "#cf1322",
-          }}
-        >
-          <strong>Order Cancelled:</strong> This order has been cancelled. If a
-          payment was made, a refund will be initiated shortly.
-        </div>
-      )}
-
       <div style={{ marginTop: "40px", textAlign: "center" }}>
         <Link
-          to="/dashboard"
+          to="/orders"
           style={{
             padding: "12px 24px",
             backgroundColor: "#f5f5f5",
@@ -255,7 +293,7 @@ const OrderTracking = () => {
             fontWeight: "bold",
           }}
         >
-          Back to Dashboard
+          Back to My Orders
         </Link>
       </div>
     </div>

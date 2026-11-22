@@ -138,7 +138,7 @@ export const depleteStockForOrder = async (orderItems, orderId) => {
             dbItem.lastNotificationSentAt < today
           ) {
             await sendMail({
-              email: process.env.GMAIL_USER,
+              email: process.env.EMAIL_USER,
               subject: `🚨 URGENT: Stock Depleted - ${dbItem.name}`,
               html: `<h2>Low Stock Alert</h2><p><strong>${dbItem.name}</strong> has fallen below threshold (${dbItem.quantity} left) due to Order ${orderId}. Restock required.</p>`,
             });

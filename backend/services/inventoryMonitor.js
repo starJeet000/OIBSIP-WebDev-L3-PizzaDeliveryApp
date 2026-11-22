@@ -20,7 +20,7 @@ export const checkLowStockAndNotify = async () => {
       // Prevent spam: Only send if no email was sent today
       if (!item.lastNotificationSentAt || item.lastNotificationSentAt < today) {
         const mailOptions = {
-          email: process.env.GMAIL_USER, // Admin receives the email
+          email: process.env.EMAIL_USER, // Admin receives the email
           subject: `🚨 ALERT: Low Stock - ${item.name}`,
           html: `
             <div style="font-family: Arial, sans-serif; border: 1px solid #ddd; padding: 20px; max-width: 600px;">
