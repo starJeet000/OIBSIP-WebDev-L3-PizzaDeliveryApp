@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
 
 - **Order Controller & Inventory Wiring:** Fixed `depleteStockForOrder` and `restockForOrder` imports in `orderController.js` to reference `../services/inventoryService.js`, updated `order.userId` population references in `updateOrderStatus` and `cancelOrder`, and passed `order.items` to `restockForOrder`[cite: 1, 2].
 - **Order Schema Customization Types:** Changed `base`, `sauce`, and `cheese` customization fields in `Order.js` to `Mixed` schema types to prevent string-casting `ValidationError`s on frontend customization objects.
-- **Order Confirmation Email Auth:** Configured `EMAIL_USER` and `EMAIL_PASS` environment credentials for Nodemailer order confirmation emails.
+- **Order Confirmation Email Auth:** Configured `GMAIL_USER` and `GMAIL_PASS` environment credentials for Nodemailer order confirmation emails.
 - **Order Tracking Parameter Lookup:** Updated `getOrderById` in `orderController.js` to read `req.params.orderId` matching `GET /api/orders/:orderId` in `orderRoutes.js`, resolving `"Order not found"` on `/orders/:id/success`[cite: 1, 3, 4, 7].
 
 ## [Unreleased] - 2026/10/22

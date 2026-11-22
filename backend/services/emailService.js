@@ -4,13 +4,13 @@ const sendMail = async (options) => {
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      user: process.env.GMAIL_USER,
+      pass: process.env.GMAIL_PASS,
     },
   });
 
   const mailOptions = {
-    from: `"PizzaDash Orders" <${process.env.EMAIL_USER}>`,
+    from: `"PizzaDash Orders" <${process.env.GMAIL_USER}>`,
     to: options.email,
     subject: options.subject,
     html: options.html,
