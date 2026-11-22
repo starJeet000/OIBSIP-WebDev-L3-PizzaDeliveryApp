@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../../services/api";
 
 const InventoryDashboard = () => {
   const [items, setItems] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [restockHistory, setRestockHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -18,40 +20,100 @@ const InventoryDashboard = () => {
   const [message, setMessage] = useState({ text: "", type: "" });
   const navigate = useNavigate();
 
-  const fetchInventory = async (currentPage) => {
+  const fetchAlertsAndHistory = useCallback(async (currentItems = []) => {
+    // 1. Fetch low-stock alerts (with fallback to items at or below minThreshold)
     try {
-      setLoading(true);
-      const res = await api.get(`/inventory?page=${currentPage}&limit=20`);
-      setItems(res.data.items);
-      setTotalPages(res.data.totalPages);
-    } catch (error) {
-      if (error.response?.status === 401 || error.response?.status === 403) {
-        navigate("/admin/login");
+      const alertsRes = await api.get("/inventory/alerts");
+      const alertItems =
+        alertsRes.data?.items || alertsRes.data?.alerts || alertsRes.data;
+      if (Array.isArray(alertItems)) {
+        setAlerts(alertItems);
+      } else {
+        setAlerts(
+          currentItems.filter(
+            (item) => Number(item.quantity) <= Number(item.minThreshold),
+          ),
+        );
       }
-    } finally {
-      setLoading(false);
+    } catch {
+      setAlerts(
+        currentItems.filter(
+          (item) => Number(item.quantity) <= Number(item.minThreshold),
+        ),
+      );
     }
-  };
+
+    // 2. Fetch restock history if backend exposes a history endpoint
+    try {
+      const historyRes = await api.get("/inventory/history");
+      const historyList =
+        historyRes.data?.history ||
+        historyRes.data?.logs ||
+        historyRes.data?.items ||
+        historyRes.data;
+      if (Array.isArray(historyList)) {
+        setRestockHistory(historyList);
+      }
+    } catch {
+      // Keep any recorded/local entries if endpoint is not separate
+    }
+  }, []);
+
+  const fetchInventory = useCallback(
+    async (currentPage) => {
+      try {
+        setLoading(true);
+        const res = await api.get(`/inventory?page=${currentPage}&limit=20`);
+        const fetchedItems = res.data.items || [];
+        setItems(fetchedItems);
+        setTotalPages(res.data.totalPages || 1);
+        if (Array.isArray(res.data.history)) {
+          setRestockHistory(res.data.history);
+        }
+        await fetchAlertsAndHistory(fetchedItems);
+      } catch (error) {
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          navigate("/admin/login");
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [navigate, fetchAlertsAndHistory],
+  );
 
   useEffect(() => {
     fetchInventory(page);
-  }, [page, navigate]);
+  }, [page, fetchInventory]);
 
   const handleUpdateStock = async (e) => {
     e.preventDefault();
     if (!selectedItem || !formData.amount) return;
 
+    const numericAmount = Number(formData.amount);
+
     try {
-      await api.put(`/inventory/${selectedItem._id}`, {
+      const res = await api.put(`/inventory/${selectedItem._id}`, {
         action: formData.action,
-        amount: Number(formData.amount),
+        amount: numericAmount,
         notes: formData.notes,
       });
 
+      const newLogEntry = {
+        _id: res.data?.log?._id || `${selectedItem._id}-${Date.now()}`,
+        itemName: selectedItem.name,
+        category: selectedItem.category,
+        action: formData.action,
+        amount: numericAmount,
+        notes: formData.notes || "Stock updated",
+        createdAt: res.data?.log?.createdAt || new Date().toISOString(),
+      };
+
+      setRestockHistory((prev) => [newLogEntry, ...prev]);
       setMessage({ text: "Stock updated successfully!", type: "success" });
       setFormData({ action: "Add", amount: "", notes: "" });
       setSelectedItem(null);
-      fetchInventory(page); // Refresh data
+      await fetchInventory(page);
 
       setTimeout(() => setMessage({ text: "", type: "" }), 3000);
     } catch (error) {
@@ -168,6 +230,7 @@ const InventoryDashboard = () => {
           <button
             onClick={() => {
               sessionStorage.removeItem("token");
+              sessionStorage.removeItem("user");
               navigate("/admin/login");
             }}
             style={{
@@ -205,6 +268,93 @@ const InventoryDashboard = () => {
             {message.text}
           </div>
         )}
+
+        {/* Low Stock Alerts Banner */}
+        <div
+          style={{
+            backgroundColor: alerts.length > 0 ? "#fff2f0" : "#f6ffed",
+            border: `1px solid ${alerts.length > 0 ? "#ffccc7" : "#b7eb8f"}`,
+            borderRadius: "8px",
+            padding: "16px 20px",
+            marginBottom: "24px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: alerts.length > 0 ? "12px" : 0,
+            }}
+          >
+            <h3
+              style={{
+                margin: 0,
+                fontSize: "16px",
+                color: alerts.length > 0 ? "#cf1322" : "#237804",
+              }}
+            >
+              {alerts.length > 0
+                ? `⚠️ Low Stock Alerts (${alerts.length})`
+                : "✅ Stock Levels Healthy — No Low Stock Alerts"}
+            </h3>
+          </div>
+
+          {alerts.length > 0 && (
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "12px",
+              }}
+            >
+              {alerts.map((alertItem) => (
+                <div
+                  key={alertItem._id || alertItem.name}
+                  style={{
+                    backgroundColor: "#fff",
+                    border: "1px solid #ffa39e",
+                    borderRadius: "6px",
+                    padding: "10px 14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "14px",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: "bold", color: "#333" }}>
+                      {alertItem.name}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#cf1322" }}>
+                      {alertItem.quantity} left (Min: {alertItem.minThreshold})
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const matchingItem =
+                        items.find((i) => i._id === alertItem._id) || alertItem;
+                      setSelectedItem(matchingItem);
+                      setFormData({ action: "Add", amount: "", notes: "" });
+                    }}
+                    style={{
+                      padding: "6px 10px",
+                      backgroundColor: "#ff4d4f",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Restock
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div
           style={{
@@ -275,7 +425,14 @@ const InventoryDashboard = () => {
                         </td>
                         <td style={{ padding: "12px" }}>
                           <button
-                            onClick={() => setSelectedItem(item)}
+                            onClick={() => {
+                              setSelectedItem(item);
+                              setFormData({
+                                action: "Add",
+                                amount: "",
+                                notes: "",
+                              });
+                            }}
                             style={{
                               padding: "6px 12px",
                               backgroundColor: "#1890ff",
@@ -469,6 +626,83 @@ const InventoryDashboard = () => {
                 </button>
               </form>
             </div>
+          )}
+        </div>
+
+        {/* Restock History Section */}
+        <div
+          style={{
+            backgroundColor: "#fff",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+            marginTop: "24px",
+          }}
+        >
+          <h3 style={{ margin: "0 0 15px 0", color: "#333", fontSize: "18px" }}>
+            Restock &amp; Adjustment History
+          </h3>
+
+          {restockHistory.length === 0 ? (
+            <p style={{ margin: 0, color: "#888", fontSize: "14px" }}>
+              No restock history entries recorded yet. Stock updates made above
+              will appear here.
+            </p>
+          ) : (
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                textAlign: "left",
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    borderBottom: "2px solid #f0f0f0",
+                    backgroundColor: "#fafafa",
+                  }}
+                >
+                  <th style={{ padding: "10px" }}>Item</th>
+                  <th style={{ padding: "10px" }}>Action</th>
+                  <th style={{ padding: "10px" }}>Amount</th>
+                  <th style={{ padding: "10px" }}>Notes</th>
+                  <th style={{ padding: "10px" }}>Timestamp</th>
+                </tr>
+              </thead>
+              <tbody>
+                {restockHistory.map((entry, idx) => (
+                  <tr
+                    key={entry._id || idx}
+                    style={{ borderBottom: "1px solid #f0f0f0" }}
+                  >
+                    <td style={{ padding: "10px", fontWeight: "bold" }}>
+                      {entry.itemName || entry.item?.name || "Ingredient"}
+                    </td>
+                    <td style={{ padding: "10px" }}>{entry.action || "Add"}</td>
+                    <td style={{ padding: "10px", fontWeight: "bold" }}>
+                      {entry.action === "Set"
+                        ? `= ${entry.amount}`
+                        : `+${entry.amount}`}
+                    </td>
+                    <td style={{ padding: "10px", color: "#555" }}>
+                      {entry.notes || "—"}
+                    </td>
+                    <td
+                      style={{
+                        padding: "10px",
+                        color: "#888",
+                        fontSize: "13px",
+                      }}
+                    >
+                      {entry.createdAt
+                        ? new Date(entry.createdAt).toLocaleString()
+                        : "Just now"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </main>

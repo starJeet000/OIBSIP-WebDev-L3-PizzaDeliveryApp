@@ -1,19 +1,27 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { useCart } from "../context/CartContext"; // Import useCart
+import { useCart } from "../context/CartContext";
 
 const PizzaCard = ({ pizza }) => {
-  const { addToCart } = useCart(); // Consume cart context
+  const { addToCart } = useCart();
+  const [isHovered, setIsHovered] = useState(false);
 
   return (
     <div
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       style={{
-        border: "1px solid #eaeaea",
+        border: isHovered ? "1px solid #ffccc7" : "1px solid #eaeaea",
         borderRadius: "8px",
         overflow: "hidden",
         backgroundColor: "#fff",
         display: "flex",
         flexDirection: "column",
+        boxShadow: isHovered
+          ? "0 8px 20px rgba(0, 0, 0, 0.08)"
+          : "0 1px 3px rgba(0, 0, 0, 0.03)",
+        transform: isHovered ? "translateY(-2px)" : "none",
+        transition: "all 0.2s ease",
       }}
     >
       <img
@@ -58,16 +66,22 @@ const PizzaCard = ({ pizza }) => {
           </span>
         </div>
 
-        {/* Description restricted to max 2 lines[cite: 1] */}
+        {/* Description restricted to max 2 lines by default, expands on hover */}
         <p
+          title={pizza.description}
           style={{
             margin: "0 0 15px 0",
             color: "#666",
             fontSize: "14px",
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-            overflow: "hidden",
+            lineHeight: "1.45",
+            ...(isHovered
+              ? {}
+              : {
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }),
           }}
         >
           {pizza.description}
@@ -75,7 +89,7 @@ const PizzaCard = ({ pizza }) => {
 
         <div style={{ marginTop: "auto", display: "flex", gap: "10px" }}>
           <button
-            onClick={() => addToCart(pizza)} // Add pizza to cart directly[cite: 1]
+            onClick={() => addToCart(pizza)}
             style={{
               flex: 1,
               padding: "8px",
@@ -84,6 +98,7 @@ const PizzaCard = ({ pizza }) => {
               color: "#ff4d4f",
               borderRadius: "4px",
               cursor: "pointer",
+              fontWeight: "bold",
             }}
           >
             Add to Cart
@@ -98,6 +113,7 @@ const PizzaCard = ({ pizza }) => {
               textDecoration: "none",
               textAlign: "center",
               borderRadius: "4px",
+              fontWeight: "bold",
             }}
           >
             Customize

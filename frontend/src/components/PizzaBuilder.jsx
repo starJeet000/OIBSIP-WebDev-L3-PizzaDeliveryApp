@@ -1,12 +1,137 @@
-import React, { useState } from "react";
-import { useCart } from "../context/CartContext"; // Import useCart
-import { useNavigate } from "react-router-dom"; // Import useNavigate
+import React, { useState, useEffect } from "react";
+import { useCart } from "../context/CartContext";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import api from "../services/api";
+
+// Step 1: 5 base options with varying prices and descriptions
+const BASES = [
+  {
+    id: "thin",
+    name: "Thin Crust",
+    price: 150,
+    desc: "Crispy and thin, perfect for toppings",
+  },
+  {
+    id: "thick",
+    name: "Thick Crust",
+    price: 180,
+    desc: "Soft and chewy with a satisfying bite",
+  },
+  {
+    id: "stuffed",
+    name: "Stuffed Crust",
+    price: 220,
+    desc: "Oozing with cheese baked right into the crust",
+  },
+  {
+    id: "wheat",
+    name: "Whole Wheat",
+    price: 160,
+    desc: "A healthier, earthy alternative",
+  },
+  {
+    id: "glutenFree",
+    name: "Gluten-Free",
+    price: 200,
+    desc: "Light and crispy, 100% gluten-free",
+  },
+];
+
+// Step 2: 5 sauce options
+const SAUCES = [
+  {
+    id: "tomato",
+    name: "Tomato",
+    price: 0,
+    desc: "Classic tangy marinara flavor profile",
+  },
+  {
+    id: "white",
+    name: "White Cream",
+    price: 30,
+    desc: "Rich, creamy Alfredo style sauce",
+  },
+  {
+    id: "bbq",
+    name: "BBQ",
+    price: 50,
+    desc: "Smoky, sweet, and tangy barbecue base",
+  },
+  {
+    id: "pesto",
+    name: "Pesto",
+    price: 40,
+    desc: "Fresh basil, garlic, and parmesan blend",
+  },
+  {
+    id: "garlic",
+    name: "Garlic",
+    price: 20,
+    desc: "Roasted garlic and olive oil infusion",
+  },
+];
+
+// Step 3: Cheese options
+const CHEESES = [
+  {
+    id: "regular",
+    name: "Regular Mozzarella",
+    price: 0,
+    desc: "Classic stretchy cheese",
+    calories: "250 kcal",
+  },
+  {
+    id: "extra",
+    name: "Extra Mozzarella",
+    price: 80,
+    desc: "Double the classic stretchy cheese",
+    calories: "350 kcal",
+  },
+  {
+    id: "mixed",
+    name: "Mixed Cheese",
+    price: 100,
+    desc: "Cheddar, Parmesan, and Mozzarella blend",
+    calories: "320 kcal",
+  },
+  {
+    id: "vegan",
+    name: "Vegan Cheese",
+    price: 120,
+    desc: "100% plant-based dairy-free melt",
+    calories: "200 kcal",
+  },
+];
+
+// Step 4: Available vegetables (15+)
+const VEGETABLES_LIST = [
+  "Onions",
+  "Bell Peppers",
+  "Mushrooms",
+  "Tomatoes",
+  "Olives",
+  "Pineapple",
+  "Spinach",
+  "Broccoli",
+  "Corn",
+  "Jalapenos",
+  "Basil",
+  "Garlic",
+  "Black Olives",
+  "Green Peppers",
+  "Sun-dried Tomatoes",
+];
 
 const PizzaBuilder = () => {
-  const { addToCart, setIsCartOpen } = useCart(); // Consume cart context
+  const { addToCart, setIsCartOpen } = useCart();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const basePizzaId = searchParams.get("basePizza");
 
-  // Pizza Builder State Management[cite: 1]
+  const [basePizza, setBasePizza] = useState(null);
+  const [loadingBase, setLoadingBase] = useState(false);
+
+  // Pizza Builder State Management
   const [currentStep, setCurrentStep] = useState(1);
   const [pizzaConfig, setPizzaConfig] = useState({
     base: null,
@@ -15,124 +140,89 @@ const PizzaBuilder = () => {
     vegetables: [],
   });
 
-  // Step 1: 5 base options with varying prices and descriptions[cite: 1]
-  const bases = [
-    {
-      id: "thin",
-      name: "Thin Crust",
-      price: 150,
-      desc: "Crispy and thin, perfect for toppings",
-    },
-    {
-      id: "thick",
-      name: "Thick Crust",
-      price: 180,
-      desc: "Soft and chewy with a satisfying bite",
-    },
-    {
-      id: "stuffed",
-      name: "Stuffed Crust",
-      price: 220,
-      desc: "Oozing with cheese baked right into the crust",
-    },
-    {
-      id: "wheat",
-      name: "Whole Wheat",
-      price: 160,
-      desc: "A healthier, earthy alternative",
-    },
-    {
-      id: "glutenFree",
-      name: "Gluten-Free",
-      price: 200,
-      desc: "Light and crispy, 100% gluten-free",
-    },
-  ];
+  // Hydrate builder when ?basePizza=<id> is provided in URL
+  useEffect(() => {
+    if (!basePizzaId) {
+      setBasePizza(null);
+      return;
+    }
 
-  // Step 2: 5 sauce options[cite: 1]
-  const sauces = [
-    {
-      id: "tomato",
-      name: "Tomato",
-      price: 0,
-      desc: "Classic tangy marinara flavor profile",
-    },
-    {
-      id: "white",
-      name: "White Cream",
-      price: 30,
-      desc: "Rich, creamy Alfredo style sauce",
-    },
-    {
-      id: "bbq",
-      name: "BBQ",
-      price: 50,
-      desc: "Smoky, sweet, and tangy barbecue base",
-    },
-    {
-      id: "pesto",
-      name: "Pesto",
-      price: 40,
-      desc: "Fresh basil, garlic, and parmesan blend",
-    },
-    {
-      id: "garlic",
-      name: "Garlic",
-      price: 20,
-      desc: "Roasted garlic and olive oil infusion",
-    },
-  ];
+    let isMounted = true;
 
-  // Step 3: Cheese options[cite: 1]
-  const cheeses = [
-    {
-      id: "regular",
-      name: "Regular Mozzarella",
-      price: 0,
-      desc: "Classic stretchy cheese",
-      calories: "250 kcal",
-    },
-    {
-      id: "extra",
-      name: "Extra Mozzarella",
-      price: 80,
-      desc: "Double the classic stretchy cheese",
-      calories: "350 kcal",
-    },
-    {
-      id: "mixed",
-      name: "Mixed Cheese",
-      price: 100,
-      desc: "Cheddar, Parmesan, and Mozzarella blend",
-      calories: "320 kcal",
-    },
-    {
-      id: "vegan",
-      name: "Vegan Cheese",
-      price: 120,
-      desc: "100% plant-based dairy-free melt",
-      calories: "200 kcal",
-    },
-  ];
+    const hydrateBasePizza = async () => {
+      try {
+        setLoadingBase(true);
+        let foundPizza = null;
 
-  // Step 4: Available vegetables (15+)[cite: 1]
-  const vegetablesList = [
-    "Onions",
-    "Bell Peppers",
-    "Mushrooms",
-    "Tomatoes",
-    "Olives",
-    "Pineapple",
-    "Spinach",
-    "Broccoli",
-    "Corn",
-    "Jalapenos",
-    "Basil",
-    "Garlic",
-    "Black Olives",
-    "Green Peppers",
-    "Sun-dried Tomatoes",
-  ];
+        try {
+          const res = await api.get(`/pizzas/${basePizzaId}`);
+          foundPizza = res.data?.pizza || res.data;
+        } catch {
+          const listRes = await api.get("/pizzas");
+          const allPizzas = Array.isArray(listRes.data)
+            ? listRes.data
+            : listRes.data?.pizzas || [];
+          foundPizza = allPizzas.find((p) => p._id === basePizzaId) || null;
+        }
+
+        if (!isMounted || !foundPizza) return;
+
+        setBasePizza(foundPizza);
+
+        // Match preset customizations/toppings if present, otherwise prefill standard defaults
+        const preset = foundPizza.defaultCustomizations || foundPizza;
+        const matchedBase =
+          BASES.find(
+            (b) =>
+              b.id === preset.base ||
+              b.name.toLowerCase() === String(preset.base || "").toLowerCase(),
+          ) || BASES[0];
+
+        const matchedSauce =
+          SAUCES.find(
+            (s) =>
+              s.id === preset.sauce ||
+              s.name.toLowerCase() === String(preset.sauce || "").toLowerCase(),
+          ) || SAUCES[0];
+
+        const matchedCheese =
+          CHEESES.find(
+            (c) =>
+              c.id === preset.cheese ||
+              c.name.toLowerCase() ===
+                String(preset.cheese || "").toLowerCase(),
+          ) || CHEESES[0];
+
+        const rawVeggies =
+          preset.vegetables || preset.toppings || foundPizza.ingredients || [];
+        const matchedVeggies = Array.isArray(rawVeggies)
+          ? rawVeggies
+              .map((v) =>
+                VEGETABLES_LIST.find(
+                  (item) => item.toLowerCase() === String(v).toLowerCase(),
+                ),
+              )
+              .filter(Boolean)
+              .slice(0, 5)
+          : [];
+
+        setPizzaConfig({
+          base: matchedBase,
+          sauce: matchedSauce,
+          cheese: matchedCheese,
+          vegetables: matchedVeggies,
+        });
+      } finally {
+        if (isMounted) setLoadingBase(false);
+      }
+    };
+
+    hydrateBasePizza();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [basePizzaId]);
 
   const handleBaseSelect = (base) => setPizzaConfig({ ...pizzaConfig, base });
   const handleSauceSelect = (sauce) =>
@@ -148,7 +238,6 @@ const PizzaBuilder = () => {
         vegetables: pizzaConfig.vegetables.filter((v) => v !== veg),
       });
     } else {
-      // Max 5 vegetables can be selected[cite: 1]
       if (pizzaConfig.vegetables.length < 5) {
         setPizzaConfig({
           ...pizzaConfig,
@@ -161,43 +250,104 @@ const PizzaBuilder = () => {
   };
 
   const handleNext = () => setCurrentStep((prev) => prev + 1);
-  const handlePrevious = () => setCurrentStep((prev) => prev - 1); // Previous button should preserve data[cite: 1]
+  const handlePrevious = () => setCurrentStep((prev) => prev - 1);
 
-  // Calculate cumulative price at each step[cite: 1]
   const calculateTotal = () => {
     let total = 0;
     if (pizzaConfig.base) total += pizzaConfig.base.price;
     if (pizzaConfig.sauce) total += pizzaConfig.sauce.price;
     if (pizzaConfig.cheese) total += pizzaConfig.cheese.price;
     if (pizzaConfig.vegetables.length > 0) {
-      total += pizzaConfig.vegetables.length * 20; // Each vegetable adds ₹20 to price[cite: 1]
+      total += pizzaConfig.vegetables.length * 20;
     }
     return total;
   };
 
   const handleCompleteOrder = () => {
-    // Generate a temporary mock pizza object for the custom creation
     const customPizza = {
-      _id: `custom-${Date.now()}`,
-      name: "Custom Built Pizza",
+      _id: basePizza
+        ? `custom-${basePizza._id}-${Date.now()}`
+        : `custom-${Date.now()}`,
+      name: basePizza ? `Custom ${basePizza.name}` : "Custom Built Pizza",
       price: calculateTotal(),
-      isVegetarian: true, // Customizable pizzas can be assumed veg based on ingredients, or flagged
-      image: "https://via.placeholder.com/300x200?text=Custom+Pizza",
+      isVegetarian: basePizza?.isVegetarian ?? true,
+      image:
+        basePizza?.image ||
+        "https://via.placeholder.com/300x200?text=Custom+Pizza",
     };
 
-    // On completion, store pizza config in Order state or Context[cite: 1]
     addToCart(customPizza, pizzaConfig, 1);
-    setIsCartOpen(true); // Open the drawer
-    navigate("/dashboard"); // Redirect to a generic page like dashboard while drawer is open
+    setIsCartOpen(true);
+    navigate("/dashboard");
   };
 
   return (
     <div style={{ maxWidth: "800px", margin: "40px auto", padding: "20px" }}>
-      <h2 style={{ textAlign: "center", marginBottom: "30px" }}>
+      <h2 style={{ textAlign: "center", marginBottom: "15px" }}>
         Build Your Custom Pizza
       </h2>
 
-      {/* Multi-step form progress indicator[cite: 1] */}
+      {loadingBase && (
+        <div
+          style={{
+            textAlign: "center",
+            color: "#666",
+            marginBottom: "20px",
+            fontSize: "14px",
+          }}
+        >
+          Loading pizza preset...
+        </div>
+      )}
+
+      {basePizza && !loadingBase && (
+        <div
+          style={{
+            backgroundColor: "#fff7e6",
+            border: "1px solid #ffd591",
+            borderRadius: "8px",
+            padding: "12px 16px",
+            marginBottom: "25px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "10px",
+          }}
+        >
+          <span style={{ color: "#ad4e00", fontSize: "14px" }}>
+            Customizing preset: <strong>{basePizza.name}</strong> (pre-loaded
+            with default selections — adjust any step below)
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setBasePizza(null);
+              setPizzaConfig({
+                base: null,
+                sauce: null,
+                cheese: null,
+                vegetables: [],
+              });
+              setCurrentStep(1);
+              navigate("/builder", { replace: true });
+            }}
+            style={{
+              background: "none",
+              border: "1px solid #ffa940",
+              color: "#ad4e00",
+              borderRadius: "4px",
+              padding: "4px 10px",
+              fontSize: "12px",
+              cursor: "pointer",
+            }}
+          >
+            Start from Scratch
+          </button>
+        </div>
+      )}
+
+      {/* Multi-step form progress indicator */}
       <div
         style={{
           display: "flex",
@@ -247,14 +397,14 @@ const PizzaBuilder = () => {
         ))}
       </div>
 
-      {/* Step 1: Choose Pizza Base[cite: 1] */}
+      {/* Step 1: Choose Pizza Base */}
       {currentStep === 1 && (
         <div className="step-container">
           <h3 style={{ marginBottom: "20px" }}>Step 1: Choose Your Base</h3>
           <div
             style={{ display: "grid", gridTemplateColumns: "1fr", gap: "15px" }}
           >
-            {bases.map((base) => (
+            {BASES.map((base) => (
               <div
                 key={base.id}
                 onClick={() => handleBaseSelect(base)}
@@ -263,7 +413,7 @@ const PizzaBuilder = () => {
                   border:
                     pizzaConfig.base?.id === base.id
                       ? "2px solid #ff4d4f"
-                      : "1px solid #ddd", // Current selection highlighted[cite: 1]
+                      : "1px solid #ddd",
                   borderRadius: "8px",
                   cursor: "pointer",
                   backgroundColor:
@@ -304,7 +454,7 @@ const PizzaBuilder = () => {
           >
             <button
               onClick={handleNext}
-              disabled={!pizzaConfig.base} // Prevent proceeding without selection[cite: 1]
+              disabled={!pizzaConfig.base}
               style={{
                 padding: "12px 30px",
                 backgroundColor: pizzaConfig.base ? "#ff4d4f" : "#ffa3a5",
@@ -321,14 +471,14 @@ const PizzaBuilder = () => {
         </div>
       )}
 
-      {/* Step 2: Choose Sauce[cite: 1] */}
+      {/* Step 2: Choose Sauce */}
       {currentStep === 2 && (
         <div className="step-container">
           <h3 style={{ marginBottom: "20px" }}>Step 2: Choose Your Sauce</h3>
           <div
             style={{ display: "grid", gridTemplateColumns: "1fr", gap: "15px" }}
           >
-            {sauces.map((sauce) => (
+            {SAUCES.map((sauce) => (
               <div
                 key={sauce.id}
                 onClick={() => handleSauceSelect(sauce)}
@@ -408,14 +558,14 @@ const PizzaBuilder = () => {
         </div>
       )}
 
-      {/* Step 3: Choose Cheese Type[cite: 1] */}
+      {/* Step 3: Choose Cheese Type */}
       {currentStep === 3 && (
         <div className="step-container">
           <h3 style={{ marginBottom: "20px" }}>Step 3: Choose Your Cheese</h3>
           <div
             style={{ display: "grid", gridTemplateColumns: "1fr", gap: "15px" }}
           >
-            {cheeses.map((cheese) => (
+            {CHEESES.map((cheese) => (
               <div
                 key={cheese.id}
                 onClick={() => handleCheeseSelect(cheese)}
@@ -495,7 +645,7 @@ const PizzaBuilder = () => {
         </div>
       )}
 
-      {/* Step 4: Choose Vegetables[cite: 1] */}
+      {/* Step 4: Choose Vegetables */}
       {currentStep === 4 && (
         <div className="step-container">
           <h3 style={{ marginBottom: "10px" }}>
@@ -505,7 +655,7 @@ const PizzaBuilder = () => {
             +₹20 for each vegetable selected.
           </p>
 
-          {/* Show selected vegetables in a tag/chip format[cite: 1] */}
+          {/* Show selected vegetables in a tag/chip format */}
           <div
             style={{
               display: "flex",
@@ -517,12 +667,14 @@ const PizzaBuilder = () => {
             {pizzaConfig.vegetables.map((veg) => (
               <span
                 key={veg}
+                onClick={() => handleVegetableToggle(veg)}
                 style={{
                   padding: "5px 12px",
                   backgroundColor: "#ff4d4f",
                   color: "#fff",
                   borderRadius: "16px",
                   fontSize: "14px",
+                  cursor: "pointer",
                 }}
               >
                 {veg} &times;
@@ -537,7 +689,7 @@ const PizzaBuilder = () => {
               gap: "15px",
             }}
           >
-            {vegetablesList.map((veg) => (
+            {VEGETABLES_LIST.map((veg) => (
               <label
                 key={veg}
                 style={{
@@ -564,7 +716,7 @@ const PizzaBuilder = () => {
             ))}
           </div>
 
-          {/* Order preview: Summary of Base + Sauce + Cheese + Veggies + Total Price[cite: 1] */}
+          {/* Order preview: Summary of Base + Sauce + Cheese + Veggies + Total Price */}
           <div
             style={{
               marginTop: "40px",
@@ -647,7 +799,7 @@ const PizzaBuilder = () => {
         </div>
       )}
 
-      {/* Cumulative price displayed at each step[cite: 1] */}
+      {/* Cumulative price displayed at each step */}
       <div
         style={{
           marginTop: "30px",

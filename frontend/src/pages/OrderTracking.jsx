@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { io } from "socket.io-client";
 import api from "../services/api";
@@ -17,9 +17,8 @@ const OrderTracking = () => {
     "Delivered",
   ];
 
-  const fetchOrderStatus = async () => {
+  const fetchOrderStatus = useCallback(async () => {
     try {
-      // Changed to fetch the full order to get the timeline properly
       const { data } = await api.get(`/orders/${id}`);
       setOrderData(data);
       setError("");
@@ -28,14 +27,18 @@ const OrderTracking = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     // 1. Initial fetch from database
     fetchOrderStatus();
 
-    // 2. Initialize WebSocket Connection (Option B)
-    // In production, this should point to your deployed backend URL
+    // 2. Poll every 10 seconds for order status updates
+    const pollInterval = setInterval(() => {
+      fetchOrderStatus();
+    }, 10000);
+
+    // 3. Initialize WebSocket Connection for instant updates
     const socket = io(
       import.meta.env.VITE_API_URL?.replace("/api", "") ||
         "http://localhost:5000",
@@ -52,18 +55,20 @@ const OrderTracking = () => {
           return {
             ...prev,
             status: data.status,
-            statusTimeline: data.timeline,
+            statusTimeline: data.timeline || prev.statusTimeline,
+            deliveryPerson: data.deliveryPerson || prev.deliveryPerson,
+            estimatedDelivery: data.estimatedDelivery || prev.estimatedDelivery,
           };
         });
       }
     });
 
-    // Clean up the socket connection when the user leaves the page
+    // Clean up polling interval and socket connection on unmount or ID change
     return () => {
+      clearInterval(pollInterval);
       socket.disconnect();
     };
-    // eslint-disable-next-line
-  }, [id]);
+  }, [id, fetchOrderStatus]);
 
   if (loading)
     return (
@@ -81,6 +86,7 @@ const OrderTracking = () => {
 
   const currentStepIndex = timelineSteps.indexOf(orderData.status);
   const isCancelled = orderData.status === "Cancelled";
+  const isDelivered = orderData.status === "Delivered";
 
   // Time formatting helper
   const formatTime = (dateString) => {
@@ -89,6 +95,35 @@ const OrderTracking = () => {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  // Estimated delivery time: uses backend estimatedDelivery or defaults to createdAt + 45 mins
+  const getEstimatedDeliveryDisplay = () => {
+    if (isCancelled) return "Cancelled";
+    if (isDelivered) {
+      const deliveredEntry = orderData.statusTimeline?.find(
+        (h) => h.status === "Delivered",
+      );
+      return deliveredEntry
+        ? `Delivered at ${formatTime(deliveredEntry.timestamp)}`
+        : "Delivered";
+    }
+
+    const etaDate = orderData.estimatedDelivery
+      ? new Date(orderData.estimatedDelivery)
+      : orderData.createdAt
+        ? new Date(new Date(orderData.createdAt).getTime() + 45 * 60 * 1000)
+        : null;
+
+    if (!etaDate || Number.isNaN(etaDate.getTime())) return "~45 mins";
+    return `${formatTime(etaDate)} (Est. 45 mins)`;
+  };
+
+  // Delivery partner info when shipped (Sent to Delivery / Delivered)
+  const rider = orderData.deliveryPerson || {
+    name: "Rajesh Kumar",
+    phone: "+91 9876543210",
+    vehicle: "Delivery Bike",
   };
 
   return (
@@ -107,6 +142,8 @@ const OrderTracking = () => {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexWrap: "wrap",
+          gap: "15px",
           marginBottom: "30px",
           borderBottom: "1px solid #eaeaea",
           paddingBottom: "20px",
@@ -114,7 +151,12 @@ const OrderTracking = () => {
       >
         <div>
           <h2 style={{ margin: "0 0 5px 0" }}>Order Tracking</h2>
-          <p style={{ margin: 0, color: "#666" }}>Order ID: {id}</p>
+          <p style={{ margin: 0, color: "#666" }}>
+            Order ID: {orderData.orderId || id}
+          </p>
+          <p style={{ margin: "6px 0 0 0", fontSize: "14px", color: "#444" }}>
+            <strong>Estimated Delivery:</strong> {getEstimatedDeliveryDisplay()}
+          </p>
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: "14px", color: "#666" }}>Current Status</div>
@@ -127,6 +169,11 @@ const OrderTracking = () => {
           >
             {orderData.status}
           </div>
+          {!isCancelled && !isDelivered && (
+            <div style={{ fontSize: "12px", color: "#888", marginTop: "4px" }}>
+              Live updates via Socket &amp; 10s sync
+            </div>
+          )}
         </div>
       </div>
 
@@ -254,7 +301,7 @@ const OrderTracking = () => {
         </div>
       )}
 
-      {/* Delivery Person Details (Mocked for UI purposes) */}
+      {/* Delivery Person Details (When shipped: Sent to Delivery or Delivered) */}
       {currentStepIndex >= 2 && !isCancelled && (
         <div
           style={{
@@ -265,17 +312,29 @@ const OrderTracking = () => {
             borderRadius: "8px",
             display: "flex",
             alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
             gap: "20px",
           }}
         >
-          <div style={{ fontSize: "40px" }}>🛵</div>
-          <div>
-            <h4 style={{ margin: "0 0 5px 0", color: "#333" }}>
-              Your delivery partner is on the way!
-            </h4>
-            <p style={{ margin: 0, color: "#555" }}>
-              Keep your phone nearby. They will call you upon arrival.
-            </p>
+          <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+            <div style={{ fontSize: "40px" }}>🛵</div>
+            <div>
+              <h4 style={{ margin: "0 0 5px 0", color: "#333" }}>
+                {isDelivered
+                  ? "Delivered by your delivery partner"
+                  : "Your delivery partner is on the way!"}
+              </h4>
+              <p
+                style={{ margin: "0 0 4px 0", color: "#444", fontSize: "14px" }}
+              >
+                <strong>Rider:</strong> {rider.name}
+                {rider.vehicle ? ` (${rider.vehicle})` : ""}
+              </p>
+              <p style={{ margin: 0, color: "#555", fontSize: "14px" }}>
+                <strong>Phone:</strong> {rider.phone} — Keep your phone nearby.
+              </p>
+            </div>
           </div>
         </div>
       )}

@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - 2026-11-22
+
+### Added
+
+- Added Menu (`/dashboard`) and Pizza Builder (`/builder`) navigation links, active route styling, a user profile dropdown menu, and a responsive mobile hamburger menu in `Navigation.jsx`[cite: 1].
+- Added card hover elevation and full-description reveal on hover in `PizzaCard.jsx`[cite: 3].
+- Added `?basePizza=` URL query parameter hydration in `PizzaBuilder.jsx` to pre-load base pizza details, default customization selections, and custom naming[cite: 2].
+- Added interactive coupon validation (`PIZZA10`, `WELCOME50`, `FEAST100`), discount calculation, removal controls, and `sessionStorage` persistence in `CartDrawer.jsx`[cite: 4].
+- Added Cash on Delivery (COD) support alongside Razorpay checkout in `OrderSummary.jsx`[cite: 5].
+
+### Changed
+
+- Aligned `OrderSummary.jsx` delivery address payload with `deliveryAddress.street` and carried `couponDiscount` from `CartDrawer.jsx` into `pricing`[cite: 4, 5].
+- Audited uploaded frontend files (`App.jsx`, `LoginForm.jsx`, `RegisterForm.jsx`, `UserDashboard.jsx`, `AvailablePizzaDisplay.jsx`, `CartContext.jsx`, `AdminLogin.jsx`, and `AdminOrders.jsx`) and flagged follow-ups for unifying auth requests on the shared `api` client, clearing the cart after checkout, guarding `createdAt` date formatting, and mounting/routing the pizza menu display.
+
 ## [Unreleased] - 2026/11/22
 
 ### Added
