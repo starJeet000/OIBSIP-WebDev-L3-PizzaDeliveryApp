@@ -21,16 +21,18 @@ const AdminOrders = () => {
 
   const navigate = useNavigate();
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (overrideSearch) => {
+    const activeSearch =
+      overrideSearch !== undefined ? overrideSearch : searchQuery;
     try {
       setLoading(true);
       let query = `/orders/admin?page=${page}&limit=15&sort=${sortOrder}`;
       if (statusFilter) query += `&status=${statusFilter}`;
-      if (searchQuery) query += `&search=${searchQuery}`;
+      if (activeSearch) query += `&search=${encodeURIComponent(activeSearch)}`;
 
       const res = await api.get(query);
-      setOrders(res.data.orders);
-      setTotalPages(res.data.totalPages);
+      setOrders(res.data.orders || []);
+      setTotalPages(res.data.totalPages || 1);
     } catch (error) {
       if (error.response?.status === 401 || error.response?.status === 403) {
         navigate("/admin/login");
@@ -50,7 +52,7 @@ const AdminOrders = () => {
   // Handle Search Submission
   const handleSearch = (e) => {
     e.preventDefault();
-    setPage(1); // Reset to page 1 on new search
+    setPage(1);
     fetchOrders();
   };
 
@@ -61,11 +63,15 @@ const AdminOrders = () => {
 
   const handleUpdateStatus = async (orderId, newStatus) => {
     try {
-      await api.put(`/orders/${orderId}/status`, { status: newStatus });
+      const res = await api.put(`/orders/${orderId}/status`, {
+        status: newStatus,
+      });
       showMessage(`Order status updated to ${newStatus}`, "success");
-      fetchOrders();
-      if (selectedOrder) {
-        setSelectedOrder({ ...selectedOrder, status: newStatus });
+      await fetchOrders();
+      if (selectedOrder && selectedOrder._id === orderId) {
+        setSelectedOrder(
+          res.data.order || { ...selectedOrder, status: newStatus },
+        );
       }
     } catch (error) {
       showMessage(
@@ -80,17 +86,19 @@ const AdminOrders = () => {
       return showMessage("Please select a cancellation reason", "error");
 
     try {
-      await api.put(`/orders/${selectedOrder._id}/cancel`, {
+      const res = await api.put(`/orders/${selectedOrder._id}/cancel`, {
         reason: cancelReason,
-        refund: true, // Assuming auto-refund is true for now
+        refund: true,
       });
       showMessage(
         "Order successfully cancelled and inventory restocked",
         "success",
       );
       setShowCancelForm(false);
-      fetchOrders();
-      setSelectedOrder({ ...selectedOrder, status: "Cancelled" });
+      await fetchOrders();
+      setSelectedOrder(
+        res.data.order || { ...selectedOrder, status: "Cancelled" },
+      );
     } catch (error) {
       showMessage(
         error.response?.data?.message || "Failed to cancel order",
@@ -102,19 +110,18 @@ const AdminOrders = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case "Delivered":
-        return "#52c41a"; // Green
+        return "#52c41a";
       case "Sent to Delivery":
-        return "#1890ff"; // Blue
+        return "#1890ff";
       case "In Kitchen":
-        return "#faad14"; // Orange
+        return "#faad14";
       case "Cancelled":
-        return "#ff4d4f"; // Red
+        return "#ff4d4f";
       default:
-        return "#8c8c8c"; // Gray for Order Received
+        return "#8c8c8c";
     }
   };
 
-  // Helper to generate available next statuses based on current status
   const getAvailableStatuses = (currentStatus) => {
     const transitions = {
       "Order Received": ["In Kitchen"],
@@ -124,6 +131,40 @@ const AdminOrders = () => {
       Cancelled: [],
     };
     return transitions[currentStatus] || [];
+  };
+
+  // Safe helpers to read Order.js schema fields cleanly
+  const getCustomer = (order) =>
+    typeof order.userId === "object" && order.userId !== null
+      ? order.userId
+      : {};
+  const getGrandTotal = (order) =>
+    Number(order.pricing?.grandTotal ?? order.totalPrice ?? 0);
+  const getSubtotal = (order) =>
+    Number(order.pricing?.subtotal ?? order.itemsPrice ?? 0);
+  const getTax = (order) => Number(order.pricing?.tax ?? order.taxPrice ?? 0);
+  const getDeliveryFee = (order) =>
+    Number(order.pricing?.deliveryFee ?? order.shippingPrice ?? 0);
+  const getAddress = (order) =>
+    order.deliveryAddress || order.shippingAddress || {};
+  const getItems = (order) => order.items || order.orderItems || [];
+
+  const formatCustomizationSummary = (item) => {
+    const cust = item.customizations || {};
+    const parts = [];
+    const baseLabel = cust.base?.name || cust.base || item.base;
+    const sauceLabel = cust.sauce?.name || cust.sauce || item.sauce;
+    const cheeseLabel = cust.cheese?.name || cust.cheese || item.cheese;
+    const veggies = cust.vegetables || item.veggies || [];
+
+    if (baseLabel) parts.push(`Base: ${baseLabel}`);
+    if (sauceLabel) parts.push(`Sauce: ${sauceLabel}`);
+    if (cheeseLabel) parts.push(`Cheese: ${cheeseLabel}`);
+
+    return {
+      summary: parts.join(" | "),
+      veggies,
+    };
   };
 
   return (
@@ -183,6 +224,7 @@ const AdminOrders = () => {
           <button
             onClick={() => {
               sessionStorage.removeItem("token");
+              sessionStorage.removeItem("user");
               navigate("/admin/login");
             }}
             style={{
@@ -305,7 +347,8 @@ const AdminOrders = () => {
                 type="button"
                 onClick={() => {
                   setSearchQuery("");
-                  fetchOrders();
+                  setPage(1);
+                  fetchOrders("");
                 }}
                 style={{
                   padding: "8px 16px",
@@ -357,62 +400,65 @@ const AdminOrders = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map((order) => (
-                    <tr
-                      key={order._id}
-                      style={{ borderBottom: "1px solid #f0f0f0" }}
-                    >
-                      <td
-                        style={{
-                          padding: "12px",
-                          fontFamily: "monospace",
-                          fontSize: "13px",
-                        }}
+                  {orders.map((order) => {
+                    const customer = getCustomer(order);
+                    return (
+                      <tr
+                        key={order._id}
+                        style={{ borderBottom: "1px solid #f0f0f0" }}
                       >
-                        {order._id}
-                      </td>
-                      <td style={{ padding: "12px" }}>
-                        {new Date(order.createdAt).toLocaleString()}
-                      </td>
-                      <td style={{ padding: "12px" }}>
-                        {order.user?.name || "Unknown"}
-                      </td>
-                      <td style={{ padding: "12px", fontWeight: "bold" }}>
-                        ₹{order.totalPrice.toFixed(2)}
-                      </td>
-                      <td style={{ padding: "12px" }}>
-                        <span
+                        <td
                           style={{
-                            backgroundColor: getStatusColor(order.status),
-                            color: "#fff",
-                            padding: "4px 8px",
-                            borderRadius: "4px",
-                            fontSize: "12px",
-                            fontWeight: "bold",
+                            padding: "12px",
+                            fontFamily: "monospace",
+                            fontSize: "13px",
                           }}
                         >
-                          {order.status}
-                        </span>
-                      </td>
-                      <td style={{ padding: "12px" }}>
-                        <button
-                          onClick={() => {
-                            setSelectedOrder(order);
-                            setShowCancelForm(false);
-                          }}
-                          style={{
-                            padding: "6px 12px",
-                            backgroundColor: "#fff",
-                            border: "1px solid #d9d9d9",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                          }}
-                        >
-                          View Details
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                          {order.orderId || order._id}
+                        </td>
+                        <td style={{ padding: "12px" }}>
+                          {new Date(order.createdAt).toLocaleString()}
+                        </td>
+                        <td style={{ padding: "12px" }}>
+                          {customer.name || "Unknown"}
+                        </td>
+                        <td style={{ padding: "12px", fontWeight: "bold" }}>
+                          ₹{getGrandTotal(order).toFixed(2)}
+                        </td>
+                        <td style={{ padding: "12px" }}>
+                          <span
+                            style={{
+                              backgroundColor: getStatusColor(order.status),
+                              color: "#fff",
+                              padding: "4px 8px",
+                              borderRadius: "4px",
+                              fontSize: "12px",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            {order.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px" }}>
+                          <button
+                            onClick={() => {
+                              setSelectedOrder(order);
+                              setShowCancelForm(false);
+                            }}
+                            style={{
+                              padding: "6px 12px",
+                              backgroundColor: "#fff",
+                              border: "1px solid #d9d9d9",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                            }}
+                          >
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {orders.length === 0 && (
                     <tr>
                       <td
@@ -475,7 +521,7 @@ const AdminOrders = () => {
       {selectedOrder && (
         <div
           style={{
-            position: "absolute",
+            position: "fixed",
             top: 0,
             left: 0,
             right: 0,
@@ -494,6 +540,7 @@ const AdminOrders = () => {
               padding: "30px",
               borderRadius: "8px",
               width: "800px",
+              maxWidth: "95%",
               maxHeight: "90vh",
               overflowY: "auto",
               margin: "40px",
@@ -512,7 +559,8 @@ const AdminOrders = () => {
               <div>
                 <h2 style={{ margin: "0 0 5px 0" }}>Order Details</h2>
                 <span style={{ fontFamily: "monospace", color: "#888" }}>
-                  ID: {selectedOrder._id}
+                  Order: {selectedOrder.orderId || selectedOrder._id} (ID:{" "}
+                  {selectedOrder._id})
                 </span>
               </div>
               <button
@@ -529,9 +577,9 @@ const AdminOrders = () => {
               </button>
             </div>
 
-            <div style={{ display: "flex", gap: "30px" }}>
+            <div style={{ display: "flex", gap: "30px", flexWrap: "wrap" }}>
               {/* Left Column: Details */}
-              <div style={{ flex: 2 }}>
+              <div style={{ flex: 2, minWidth: "280px" }}>
                 <h4
                   style={{
                     margin: "0 0 10px 0",
@@ -542,10 +590,12 @@ const AdminOrders = () => {
                   Customer Info
                 </h4>
                 <p style={{ margin: "5px 0" }}>
-                  <strong>Name:</strong> {selectedOrder.user?.name}
+                  <strong>Name:</strong>{" "}
+                  {getCustomer(selectedOrder).name || "N/A"}
                 </p>
                 <p style={{ margin: "5px 0" }}>
-                  <strong>Email:</strong> {selectedOrder.user?.email}
+                  <strong>Email:</strong>{" "}
+                  {getCustomer(selectedOrder).email || "N/A"}
                 </p>
 
                 <h4
@@ -557,22 +607,30 @@ const AdminOrders = () => {
                 >
                   Delivery Address
                 </h4>
-                <p style={{ margin: "5px 0" }}>
-                  {selectedOrder.shippingAddress.address},{" "}
-                  {selectedOrder.shippingAddress.city},{" "}
-                  {selectedOrder.shippingAddress.postalCode}
-                </p>
-                {selectedOrder.shippingAddress.instructions && (
-                  <p
-                    style={{
-                      margin: "5px 0",
-                      color: "#d48806",
-                      fontStyle: "italic",
-                    }}
-                  >
-                    Note: {selectedOrder.shippingAddress.instructions}
-                  </p>
-                )}
+                {(() => {
+                  const addr = getAddress(selectedOrder);
+                  const streetLine = addr.street || addr.address || "";
+                  return (
+                    <>
+                      <p style={{ margin: "5px 0" }}>
+                        {[streetLine, addr.city, addr.postalCode]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </p>
+                      {addr.instructions && (
+                        <p
+                          style={{
+                            margin: "5px 0",
+                            color: "#d48806",
+                            fontStyle: "italic",
+                          }}
+                        >
+                          Note: {addr.instructions}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
 
                 <h4
                   style={{
@@ -590,44 +648,55 @@ const AdminOrders = () => {
                     gap: "10px",
                   }}
                 >
-                  {selectedOrder.orderItems.map((item, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        padding: "10px",
-                        backgroundColor: "#fafafa",
-                        borderRadius: "4px",
-                        border: "1px solid #eee",
-                      }}
-                    >
+                  {getItems(selectedOrder).map((item, index) => {
+                    const qty = Number(item.quantity ?? item.qty ?? 1);
+                    const name = item.pizzaType || item.name || "Pizza";
+                    const unitPrice = Number(item.unitPrice ?? item.price ?? 0);
+                    const lineTotal = Number(
+                      item.totalPrice ?? unitPrice * qty,
+                    );
+                    const { summary, veggies } =
+                      formatCustomizationSummary(item);
+
+                    return (
                       <div
+                        key={index}
                         style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontWeight: "bold",
+                          padding: "10px",
+                          backgroundColor: "#fafafa",
+                          borderRadius: "4px",
+                          border: "1px solid #eee",
                         }}
                       >
-                        <span>
-                          {item.qty}x {item.name}
-                        </span>
-                        <span>₹{(item.price * item.qty).toFixed(2)}</span>
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "13px",
-                          color: "#666",
-                          marginTop: "5px",
-                        }}
-                      >
-                        {item.base && <span>Base: {item.base} | </span>}
-                        {item.sauce && <span>Sauce: {item.sauce} | </span>}
-                        {item.cheese && <span>Cheese: {item.cheese} </span>}
-                        {item.veggies?.length > 0 && (
-                          <div>Veggies: {item.veggies.join(", ")}</div>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          <span>
+                            {qty}x {name}
+                          </span>
+                          <span>₹{lineTotal.toFixed(2)}</span>
+                        </div>
+                        {(summary || veggies.length > 0) && (
+                          <div
+                            style={{
+                              fontSize: "13px",
+                              color: "#666",
+                              marginTop: "5px",
+                            }}
+                          >
+                            {summary && <div>{summary}</div>}
+                            {veggies.length > 0 && (
+                              <div>Veggies: {veggies.join(", ")}</div>
+                            )}
+                          </div>
                         )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -635,6 +704,7 @@ const AdminOrders = () => {
               <div
                 style={{
                   flex: 1,
+                  minWidth: "240px",
                   backgroundColor: "#fafafa",
                   padding: "20px",
                   borderRadius: "8px",
@@ -650,7 +720,7 @@ const AdminOrders = () => {
                   }}
                 >
                   <span>Subtotal:</span>{" "}
-                  <span>₹{selectedOrder.itemsPrice.toFixed(2)}</span>
+                  <span>₹{getSubtotal(selectedOrder).toFixed(2)}</span>
                 </div>
                 <div
                   style={{
@@ -660,7 +730,7 @@ const AdminOrders = () => {
                   }}
                 >
                   <span>Tax:</span>{" "}
-                  <span>₹{selectedOrder.taxPrice.toFixed(2)}</span>
+                  <span>₹{getTax(selectedOrder).toFixed(2)}</span>
                 </div>
                 <div
                   style={{
@@ -670,7 +740,7 @@ const AdminOrders = () => {
                   }}
                 >
                   <span>Delivery:</span>{" "}
-                  <span>₹{selectedOrder.shippingPrice.toFixed(2)}</span>
+                  <span>₹{getDeliveryFee(selectedOrder).toFixed(2)}</span>
                 </div>
                 <div
                   style={{
@@ -683,7 +753,7 @@ const AdminOrders = () => {
                   }}
                 >
                   <span>Total:</span>{" "}
-                  <span>₹{selectedOrder.totalPrice.toFixed(2)}</span>
+                  <span>₹{getGrandTotal(selectedOrder).toFixed(2)}</span>
                 </div>
 
                 <div
@@ -733,7 +803,7 @@ const AdminOrders = () => {
                     ),
                   )}
 
-                  {/* Cancel Button (Only if not delivered/cancelled/sent to delivery) */}
+                  {/* Cancel Button */}
                   {["Order Received", "In Kitchen"].includes(
                     selectedOrder.status,
                   ) &&

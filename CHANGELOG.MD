@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
   - **Sequential Status Workflow:** Enforced strict status transitions (`Order Received` → `In Kitchen` → `Sent to Delivery` → `Delivered`) backed by `nodemailer` email notifications dispatched to customers on each state change.
   - **Order Cancellation & Inventory Restock:** Implemented admin-only cancellations for active orders with reason tracking, automatically returning depleted ingredients back to the MongoDB inventory via `restockForOrder`.
   - **Automated Razorpay Refunds:** Integrated the `razorpay.payments.refund()` API directly into the cancellation flow, calculating sub-unit paise amounts and automatically dispatching instant payment refunds to customers upon order cancellation.
-- **Admin Overview Dashboard:** Completed `AdminDashboard.jsx` with daily KPI cards, Recharts revenue/hourly/top-pizza charts, quick navigation, and low-stock notifications modal.
+  - **Admin Overview Dashboard:** Completed `AdminDashboard.jsx` with daily KPI cards, Recharts revenue/hourly/top-pizza charts, quick navigation, and low-stock notifications modal.
 
 ### Fixed
 
@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file.
 - **Order Schema Customization Types:** Changed `base`, `sauce`, and `cheese` customization fields in `Order.js` to `Mixed` schema types to prevent string-casting `ValidationError`s on frontend customization objects.
 - **Order Confirmation Email Auth:** Configured `GMAIL_USER` and `GMAIL_PASS` environment credentials for Nodemailer order confirmation emails.
 - **Order Tracking Parameter Lookup:** Updated `getOrderById` in `orderController.js` to read `req.params.orderId` matching `GET /api/orders/:orderId` in `orderRoutes.js`, resolving `"Order not found"` on `/orders/:id/success`[cite: 1, 3, 4, 7].
+- **Admin Orders Schema Alignment:** Updated `AdminOrders.jsx` to read `userId`, `pricing`, `deliveryAddress`, and `items` / `customizations` fields matching `Order.js` and `orderController.js`.
 
 ## [Unreleased] - 2026/10/22
 
