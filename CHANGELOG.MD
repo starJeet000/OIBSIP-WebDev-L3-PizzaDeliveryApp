@@ -12,13 +12,14 @@ All notable changes to this project will be documented in this file.
   - **Sequential Status Workflow:** Enforced strict status transitions (`Order Received` → `In Kitchen` → `Sent to Delivery` → `Delivered`) backed by `nodemailer` email notifications dispatched to customers on each state change.
   - **Order Cancellation & Inventory Restock:** Implemented admin-only cancellations for active orders with reason tracking, automatically returning depleted ingredients back to the MongoDB inventory via `restockForOrder`.
   - **Automated Razorpay Refunds:** Integrated the `razorpay.payments.refund()` API directly into the cancellation flow, calculating sub-unit paise amounts and automatically dispatching instant payment refunds to customers upon order cancellation.
+- **Admin Overview Dashboard:** Completed `AdminDashboard.jsx` with daily KPI cards, Recharts revenue/hourly/top-pizza charts, quick navigation, and low-stock notifications modal.
 
 ### Fixed
 
-- **Order Creation & Inventory Service Wiring:** Fixed `depleteStockForOrder` and `restockForOrder` imports in `orderController.js` to point to `../services/inventoryService.js`[cite: 1, 2], resolved `order.userId` population access in status update and cancellation handlers[cite: 1], and updated cancellation restocking to use `order.items`[cite: 1].
-- **Order Customization Schema Casting:** Updated `Order.js` customization fields (`base`, `sauce`, `cheese`) to `Mixed` schema types so full customization objects from the frontend save without Mongoose string-casting validation errors.
-- **Order Confirmation Email Credentials:** Verified `EMAIL_USER` and `EMAIL_PASS` environment configuration and Nodemailer transport setup so order confirmation emails send without `Missing credentials for "PLAIN"` errors.
-- **Order Tracking Lookup:** Fixed `getOrderById` in `orderController.js` to read `req.params.orderId` to match `/orders/:orderId` in `orderRoutes.js`[cite: 1, 7], resolving the `"Order not found"` error on `/orders/:id/success`[cite: 3, 4].
+- **Order Controller & Inventory Wiring:** Fixed `depleteStockForOrder` and `restockForOrder` imports in `orderController.js` to reference `../services/inventoryService.js`, updated `order.userId` population references in `updateOrderStatus` and `cancelOrder`, and passed `order.items` to `restockForOrder`[cite: 1, 2].
+- **Order Schema Customization Types:** Changed `base`, `sauce`, and `cheese` customization fields in `Order.js` to `Mixed` schema types to prevent string-casting `ValidationError`s on frontend customization objects.
+- **Order Confirmation Email Auth:** Configured `EMAIL_USER` and `EMAIL_PASS` environment credentials for Nodemailer order confirmation emails.
+- **Order Tracking Parameter Lookup:** Updated `getOrderById` in `orderController.js` to read `req.params.orderId` matching `GET /api/orders/:orderId` in `orderRoutes.js`, resolving `"Order not found"` on `/orders/:id/success`[cite: 1, 3, 4, 7].
 
 ## [Unreleased] - 2026/10/22
 
